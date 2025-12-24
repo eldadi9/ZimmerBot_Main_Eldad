@@ -1,0 +1,15 @@
+{
+  "token": "YOUR_ACCESS_TOKEN",
+  "refresh_token": "YOUR_REFRESH_TOKEN",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "client_id": "YOUR_CLIENT_ID",
+  "client_secret": "YOUR_CLIENT_SECRET",
+  "scopes": [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/calendar.events"
+  ],
+  "universe_domain": "googleapis.com",
+  "account": "",
+  "expiry": "YYYY-MM-DDTHH:MM:SSZ"
+}
