@@ -56,34 +56,59 @@ def get_israel_tzinfo():
 ISRAEL_TZ = get_israel_tzinfo()
 
 
-def get_credentials() -> Credentials:
-    if not CREDS_PATH.exists():
-        raise FileNotFoundError(f"Missing credentials.json at: {CREDS_PATH}")
+def get_credentials():
+    import os
+    from pathlib import Path
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
 
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    BASE_DIR = Path(__file__).resolve().parents[1]
+    data_dir = BASE_DIR / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    # Scopes for: read Google Sheets + read/write Google Calendar
+    SCOPES = [
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/calendar",
+    ]
+
+    token_path = data_dir / "token.json"
+    creds_path = data_dir / "credentials.json"
+
+    # fallback if credentials.json is in project root
+    if not creds_path.exists():
+        alt = BASE_DIR / "credentials.json"
+        if alt.exists():
+            creds_path = alt
+
+    if not creds_path.exists():
+        raise FileNotFoundError(
+            "Missing credentials.json. Put it in data/credentials.json or in project root."
+        )
 
     creds = None
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
 
-        # אם ה token נוצר עם scopes אחרים בעבר, נחייב reauth
+    if token_path.exists():
         try:
-            token_scopes = set(creds.scopes or [])
-            wanted_scopes = set(SCOPES)
-            if not wanted_scopes.issubset(token_scopes):
-                creds = None
+            creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
         except Exception:
-            pass
+            creds = None
+
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except Exception:
+            creds = None
 
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_PATH), SCOPES)
-            creds = flow.run_local_server(port=0)
-        TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+        flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), SCOPES)
+        creds = flow.run_local_server(port=0)
+        token_path.write_text(creds.to_json(), encoding="utf-8")
 
     return creds
+
+
 
 
 def read_cabins_from_sheet(creds: Credentials) -> list[dict]:
@@ -549,6 +574,69 @@ def main_cli():
         print(f"Link: {created.get('htmlLink')}")
 
     print("ZimmerBot - availability cli done")
+
+def get_credentials_api():
+    """
+    API credentials loader with enforced scopes.
+    Creates a separate token file for the API server to avoid conflicts.
+    """
+    import os
+    from pathlib import Path
+
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+
+    base_dir = Path(__file__).resolve().parents[1]
+    data_dir = base_dir / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    token_path = data_dir / "token_api.json"
+
+    # Scopes required for:
+    # - read cabins from Google Sheets
+    # - check availability in Google Calendar
+    # - create booking events in Google Calendar
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/calendar",
+    ]
+
+    # Try load existing token
+    creds = None
+    if token_path.exists():
+        creds = Credentials.from_authorized_user_file(str(token_path), scopes=scopes)
+
+    # Refresh or re-auth if needed
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # credentials.json must exist (usually under data/ or project root)
+            # If your project uses a different path, update here accordingly.
+            candidates = [
+                base_dir / "data" / "credentials.json",
+                base_dir / "credentials.json",
+            ]
+            cred_file = None
+            for c in candidates:
+                if c.exists():
+                    cred_file = c
+                    break
+            if not cred_file:
+                raise FileNotFoundError(
+                    "credentials.json not found. Put it in data/credentials.json or project root."
+                )
+
+            flow = InstalledAppFlow.from_client_secrets_file(str(cred_file), scopes=scopes)
+            creds = flow.run_local_server(port=0)
+
+        # Save token
+        with open(token_path, "w", encoding="utf-8") as f:
+            f.write(creds.to_json())
+
+    return creds
+
 
 
 def main():

@@ -1,0 +1,386 @@
+{
+  "version": 1,
+  "title": "ZimmerBot Features Catalog",
+  "categories": [
+    {
+      "id": "internet",
+      "label_he": "אינטרנט ותקשורת",
+      "items": [
+        {
+          "key": "internet",
+          "label_he": "אינטרנט"
+        },
+        {
+          "key": "fast_wifi",
+          "label_he": "ווייפיי מהיר"
+        },
+        {
+          "key": "fiber_wifi",
+          "label_he": "סיב אופטי"
+        },
+        {
+          "key": "wifi_mesh",
+          "label_he": "רשת Mesh"
+        },
+        {
+          "key": "work_desk",
+          "label_he": "עמדת עבודה"
+        }
+      ]
+    },
+    {
+      "id": "kids",
+      "label_he": "ילדים ומשפחות",
+      "items": [
+        {
+          "key": "kids_friendly",
+          "label_he": "ידידותי לילדים"
+        },
+        {
+          "key": "baby_bed",
+          "label_he": "מיטת תינוק"
+        },
+        {
+          "key": "baby_chair",
+          "label_he": "כיסא אוכל לתינוק"
+        },
+        {
+          "key": "baby_bath",
+          "label_he": "אמבט לתינוק"
+        },
+        {
+          "key": "baby_monitor",
+          "label_he": "מוניטור תינוק"
+        },
+        {
+          "key": "stroller_access",
+          "label_he": "גישה נוחה לעגלות"
+        },
+        {
+          "key": "playground",
+          "label_he": "מתקן משחקים"
+        },
+        {
+          "key": "kids_pool",
+          "label_he": "בריכת ילדים"
+        },
+        {
+          "key": "game_room",
+          "label_he": "חדר משחקים"
+        },
+        {
+          "key": "board_games",
+          "label_he": "משחקי קופסא"
+        },
+        {
+          "key": "kids_tv",
+          "label_he": "ערוצי ילדים"
+        },
+        {
+          "key": "family_suite",
+          "label_he": "סוויטה למשפחה"
+        },
+        {
+          "key": "safe_stairs",
+          "label_he": "מדרגות בטוחות"
+        },
+        {
+          "key": "stair_gate",
+          "label_he": "שער בטיחות למדרגות"
+        },
+        {
+          "key": "window_guards",
+          "label_he": "סורגי בטיחות לחלונות"
+        }
+      ]
+    },
+    {
+      "id": "outdoor",
+      "label_he": "חוץ וחצר",
+      "items": [
+        {
+          "key": "private_yard",
+          "label_he": "חצר פרטית"
+        },
+        {
+          "key": "garden",
+          "label_he": "גינה"
+        },
+        {
+          "key": "bbq",
+          "label_he": "מנגל"
+        },
+        {
+          "key": "gas_bbq",
+          "label_he": "מנגל גז"
+        },
+        {
+          "key": "outdoor_dining",
+          "label_he": "פינת אוכל חיצונית"
+        },
+        {
+          "key": "hammock",
+          "label_he": "ערסל"
+        },
+        {
+          "key": "fire_pit",
+          "label_he": "מדורת גן"
+        },
+        {
+          "key": "outdoor_shower",
+          "label_he": "מקלחת חוץ"
+        },
+        {
+          "key": "parking",
+          "label_he": "חניה"
+        },
+        {
+          "key": "covered_parking",
+          "label_he": "חניה מקורה"
+        },
+        {
+          "key": "ev_charger",
+          "label_he": "טעינה לרכב חשמלי"
+        }
+      ]
+    },
+    {
+      "id": "pool_spa",
+      "label_he": "בריכה וספא",
+      "items": [
+        {
+          "key": "pool",
+          "label_he": "בריכה"
+        },
+        {
+          "key": "heated_pool",
+          "label_he": "בריכה מחוממת"
+        },
+        {
+          "key": "private_pool",
+          "label_he": "בריכה פרטית"
+        },
+        {
+          "key": "jacuzzi",
+          "label_he": "גקוזי"
+        },
+        {
+          "key": "hot_tub",
+          "label_he": "אמבט חם"
+        },
+        {
+          "key": "sauna",
+          "label_he": "סאונה"
+        },
+        {
+          "key": "steam_room",
+          "label_he": "חמאם"
+        }
+      ]
+    },
+    {
+      "id": "kitchen",
+      "label_he": "מטבח ואוכל",
+      "items": [
+        {
+          "key": "kitchen",
+          "label_he": "מטבח"
+        },
+        {
+          "key": "full_kitchen",
+          "label_he": "מטבח מאובזר"
+        },
+        {
+          "key": "kosher_kitchen",
+          "label_he": "מטבח כשר"
+        },
+        {
+          "key": "shabbat_hotplate",
+          "label_he": "פלטת שבת"
+        },
+        {
+          "key": "shabbat_urn",
+          "label_he": "מיחם שבת"
+        },
+        {
+          "key": "coffee_machine",
+          "label_he": "מכונת קפה"
+        },
+        {
+          "key": "espresso_machine",
+          "label_he": "מכונת אספרסו"
+        },
+        {
+          "key": "dishwasher",
+          "label_he": "מדיח כלים"
+        },
+        {
+          "key": "microwave",
+          "label_he": "מיקרוגל"
+        },
+        {
+          "key": "oven",
+          "label_he": "תנור"
+        },
+        {
+          "key": "toaster",
+          "label_he": "טוסטר"
+        },
+        {
+          "key": "blender",
+          "label_he": "בלנדר"
+        },
+        {
+          "key": "water_filter",
+          "label_he": "מסנן מים"
+        },
+        {
+          "key": "high_chair",
+          "label_he": "כיסא אוכל"
+        }
+      ]
+    },
+    {
+      "id": "comfort",
+      "label_he": "נוחות",
+      "items": [
+        {
+          "key": "ac",
+          "label_he": "מיזוג אוויר"
+        },
+        {
+          "key": "heating",
+          "label_he": "חימום"
+        },
+        {
+          "key": "floor_heating",
+          "label_he": "חימום תת רצפתי"
+        },
+        {
+          "key": "fireplace",
+          "label_he": "קמין"
+        },
+        {
+          "key": "blackout_curtains",
+          "label_he": "וילונות האפלה"
+        },
+        {
+          "key": "quiet_room",
+          "label_he": "חדר שקט"
+        },
+        {
+          "key": "washing_machine",
+          "label_he": "מכונת כביסה"
+        },
+        {
+          "key": "dryer",
+          "label_he": "מייבש כביסה"
+        }
+      ]
+    },
+    {
+      "id": "entertainment",
+      "label_he": "בידור",
+      "items": [
+        {
+          "key": "smart_tv",
+          "label_he": "טלוויזיה חכמה"
+        },
+        {
+          "key": "netflix",
+          "label_he": "נטפליקס"
+        },
+        {
+          "key": "youtube",
+          "label_he": "יוטיוב"
+        },
+        {
+          "key": "speaker",
+          "label_he": "רמקול"
+        },
+        {
+          "key": "projector",
+          "label_he": "מקרן"
+        },
+        {
+          "key": "playstation",
+          "label_he": "פלייסטיישן"
+        }
+      ]
+    },
+    {
+      "id": "safety",
+      "label_he": "בטיחות ואבטחה",
+      "items": [
+        {
+          "key": "safe_room",
+          "label_he": "ממ\"ד"
+        },
+        {
+          "key": "cctv_outdoor",
+          "label_he": "מצלמות חוץ"
+        },
+        {
+          "key": "alarm",
+          "label_he": "אזעקה"
+        },
+        {
+          "key": "smoke_detector",
+          "label_he": "גלאי עשן"
+        },
+        {
+          "key": "fire_extinguisher",
+          "label_he": "מטף"
+        },
+        {
+          "key": "first_aid",
+          "label_he": "ערכת עזרה ראשונה"
+        }
+      ]
+    },
+    {
+      "id": "accessibility",
+      "label_he": "נגישות",
+      "items": [
+        {
+          "key": "accessible",
+          "label_he": "נגיש"
+        },
+        {
+          "key": "no_stairs",
+          "label_he": "ללא מדרגות"
+        },
+        {
+          "key": "accessible_bathroom",
+          "label_he": "שירותים נגישים"
+        },
+        {
+          "key": "wide_doors",
+          "label_he": "דלתות רחבות"
+        }
+      ]
+    },
+    {
+      "id": "policies",
+      "label_he": "מדיניות",
+      "items": [
+        {
+          "key": "pets_allowed",
+          "label_he": "חיות מחמד מותר"
+        },
+        {
+          "key": "no_smoking",
+          "label_he": "ללא עישון"
+        },
+        {
+          "key": "self_checkin",
+          "label_he": "צק אין עצמי"
+        },
+        {
+          "key": "late_checkout",
+          "label_he": "צק אאוט מאוחר"
+        }
+      ]
+    }
+  ]
+}

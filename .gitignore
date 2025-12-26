@@ -17,3 +17,12 @@ data/*.sqlite
 data/*.sqlite3
 data/*.json.bak
 data/*.backup
+# Sensitive tokens and keys (keep local)
+data/token_api.json
+data/*token*.json
+data/*secret*.json
+data/*key*.json
+data/*credentials*.json
+
+# Optional: block private docs in root (the Hebrew docx you see as untracked)
+*.docx

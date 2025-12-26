@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZimmerBot Features Builder</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin: 10px 0; }
+    .cat-title { font-weight: bold; margin-bottom: 8px; }
+    .items { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; }
+    label { display: inline-flex; align-items: center; gap: 8px; }
+    input[type="text"], input[type="number"] { padding: 6px; width: 220px; }
+    textarea { width: 100%; height: 90px; padding: 8px; }
+    button { padding: 8px 12px; cursor: pointer; }
+    .mono { font-family: Consolas, monospace; }
+    .small { font-size: 12px; color: #444; }
+    .ok { color: #0a7; }
+    .err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h2>בניית Features לצימר</h2>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="small">חיפוש</div>
+        <input id="search" type="text" placeholder="חפש פיצר..." />
+      </div>
+
+      <div>
+        <div class="small">API Base URL</div>
+        <input id="apiBase" type="text" value="http://127.0.0.1:8000" />
+      </div>
+    </div>
+  </div>
+
+  <div id="cats"></div>
+
+  <div class="card">
+    <div class="cat-title">התוצאה (features עם פסיקים)</div>
+    <textarea id="featuresOut" class="mono" readonly></textarea>
+    <div class="row">
+      <button id="copyBtn">העתק Features</button>
+      <button id="clearBtn">נקה בחירה</button>
+      <span id="copyStatus" class="small"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cat-title">בדיקת Availability ישר מול ה API</div>
+    <div class="row">
+      <div>
+        <div class="small">check_in (YYYY-MM-DD HH:MM)</div>
+        <input id="checkIn" type="text" value="2026-02-01 15:00" />
+      </div>
+      <div>
+        <div class="small">check_out (YYYY-MM-DD HH:MM)</div>
+        <input id="checkOut" type="text" value="2026-02-02 11:00" />
+      </div>
+      <div>
+        <div class="small">adults</div>
+        <input id="adults" type="number" value="2" />
+      </div>
+      <div>
+        <div class="small">kids</div>
+        <input id="kids" type="number" value="0" />
+      </div>
+      <div>
+        <div class="small">area</div>
+        <input id="area" type="text" placeholder="למשל: גליל מערבי" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <button id="sendBtn">שלח ל POST /availability</button>
+      <button id="copyBodyBtn">העתק גוף בקשה ל Swagger</button>
+      <span id="sendStatus" class="small"></span>
+    </div>
+
+    <div style="margin-top:10px;">
+      <div class="small">Request body (להדבקה ב Swagger)</div>
+      <textarea id="reqBody" class="mono" readonly></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <div class="small">Response</div>
+      <textarea id="respOut" class="mono" readonly></textarea>
+    </div>
+  </div>
+
+<script>
+  const state = {
+    catalog: null,
+    selected: new Set(),
+    search: ""
+  };
+
+  function normalize(s) {
+    return String(s || "").toLowerCase().trim();
+  }
+
+  function buildFeaturesString() {
+    return Array.from(state.selected).join(",");
+  }
+
+  function buildRequestBody() {
+    const features = buildFeaturesString();
+    const areaVal = document.getElementById("area").value.trim();
+    const adultsVal = Number(document.getElementById("adults").value);
+    const kidsVal = Number(document.getElementById("kids").value);
+
+    const body = {
+      check_in: document.getElementById("checkIn").value.trim(),
+      check_out: document.getElementById("checkOut").value.trim(),
+      adults: Number.isFinite(adultsVal) ? adultsVal : null,
+      kids: Number.isFinite(kidsVal) ? kidsVal : null,
+      area: areaVal ? areaVal : null,
+      features: features ? features : null
+    };
+
+    document.getElementById("reqBody").value = JSON.stringify(body, null, 2);
+    return body;
+  }
+
+  function render() {
+    const catsEl = document.getElementById("cats");
+    catsEl.innerHTML = "";
+
+    if (!state.catalog) {
+      catsEl.innerHTML = "<div class='card'>לא נטען catalog</div>";
+      return;
+    }
+
+    const q = normalize(state.search);
+
+    for (const cat of state.catalog.categories || []) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const title = document.createElement("div");
+      title.className = "cat-title";
+      title.textContent = cat.title || cat.id;
+      card.appendChild(title);
+
+      const items = document.createElement("div");
+      items.className = "items";
+
+      for (const it of cat.items || []) {
+        const key = it.key;
+        const labelTxt = it.label || it.key;
+
+        const hay = normalize(key + " " + labelTxt);
+        if (q && !hay.includes(q)) continue;
+
+        const lab = document.createElement("label");
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = state.selected.has(key);
+        cb.addEventListener("change", () => {
+          if (cb.checked) state.selected.add(key);
+          else state.selected.delete(key);
+          updateOutputs();
+        });
+
+        const span = document.createElement("span");
+        span.textContent = labelTxt + " (" + key + ")";
+
+        lab.appendChild(cb);
+        lab.appendChild(span);
+        items.appendChild(lab);
+      }
+
+      if (items.children.length === 0) continue;
+
+      card.appendChild(items);
+      catsEl.appendChild(card);
+    }
+
+    updateOutputs();
+  }
+
+  function updateOutputs() {
+    document.getElementById("featuresOut").value = buildFeaturesString();
+    buildRequestBody();
+  }
+
+  async function loadCatalog() {
+    const res = await fetch("/data/features_catalog.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed to load catalog: " + res.status);
+    state.catalog = await res.json();
+    render();
+  }
+
+  document.getElementById("search").addEventListener("input", (e) => {
+    state.search = e.target.value;
+    render();
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    const txt = document.getElementById("featuresOut").value;
+    try {
+      await navigator.clipboard.writeText(txt);
+      document.getElementById("copyStatus").textContent = "הועתק";
+      document.getElementById("copyStatus").className = "small ok";
+    } catch (e) {
+      document.getElementById("copyStatus").textContent = "העתקה נכשלה";
+      document.getElementById("copyStatus").className = "small err";
+    }
+  });
+
+  document.getElementById("copyBodyBtn").addEventListener("click", async () => {
+    const txt = document.getElementById("reqBody").value;
+    try {
+      await navigator.clipboard.writeText(txt);
+      document.getElementById("sendStatus").textContent = "גוף בקשה הועתק, הדבק ב Swagger";
+      document.getElementById("sendStatus").className = "small ok";
+    } catch (e) {
+      document.getElementById("sendStatus").textContent = "העתקה נכשלה";
+      document.getElementById("sendStatus").className = "small err";
+    }
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    state.selected.clear();
+    updateOutputs();
+    render();
+  });
+
+  document.getElementById("sendBtn").addEventListener("click", async () => {
+    const apiBase = document.getElementById("apiBase").value.trim().replace(/\/+$/, "");
+    const body = buildRequestBody();
+
+    document.getElementById("sendStatus").textContent = "שולח...";
+    document.getElementById("sendStatus").className = "small";
+
+    try {
+      const res = await fetch(apiBase + "/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      const txt = await res.text();
+      document.getElementById("respOut").value = txt;
+
+      if (!res.ok) {
+        document.getElementById("sendStatus").textContent = "שגיאה: " + res.status;
+        document.getElementById("sendStatus").className = "small err";
+      } else {
+        document.getElementById("sendStatus").textContent = "בוצע בהצלחה";
+        document.getElementById("sendStatus").className = "small ok";
+      }
+    } catch (e) {
+      document.getElementById("sendStatus").textContent = "שגיאת רשת: " + e.message;
+      document.getElementById("sendStatus").className = "small err";
+    }
+  });
+
+  loadCatalog().catch(err => {
+    document.getElementById("cats").innerHTML = "<div class='card err'>שגיאה: " + err.message + "</div>";
+  });
+</script>
+
+</body>
+</html>

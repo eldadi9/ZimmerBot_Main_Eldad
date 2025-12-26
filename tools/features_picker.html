@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ZimmerBot - Features Picker</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; min-width: 280px; }
+    h2 { margin: 0 0 8px 0; font-size: 16px; }
+    label { display: block; margin: 6px 0; }
+    input[type="text"] { width: 100%; padding: 8px; }
+    button { padding: 8px 12px; cursor: pointer; }
+    pre { background: #111; color: #eee; padding: 10px; border-radius: 8px; overflow: auto; }
+    .small { font-size: 12px; color: #444; }
+    .ok { color: #0a7; }
+    .err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>ZimmerBot - בחירת Features</h1>
+
+  <div class="card">
+    <div class="row">
+      <div style="min-width:260px">
+        <label>Check-in (YYYY-MM-DD HH:MM)</label>
+        <input id="check_in" type="text" value="2026-02-01 15:00" />
+      </div>
+      <div style="min-width:260px">
+        <label>Check-out (YYYY-MM-DD HH:MM)</label>
+        <input id="check_out" type="text" value="2026-02-02 11:00" />
+      </div>
+      <div style="min-width:140px">
+        <label>Adults</label>
+        <input id="adults" type="text" value="" placeholder="null" />
+      </div>
+      <div style="min-width:140px">
+        <label>Kids</label>
+        <input id="kids" type="text" value="" placeholder="null" />
+      </div>
+      <div style="min-width:220px">
+        <label>Area</label>
+        <input id="area" type="text" value="" placeholder="null" />
+      </div>
+    </div>
+
+    <div style="margin-top:10px">
+      <button id="btn_copy">העתק Features</button>
+      <button id="btn_post">שלח POST ל /availability</button>
+      <span id="msg" class="small"></span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <div class="card" style="flex:1">
+      <h2>Features שנבחרו</h2>
+      <input id="features_out" type="text" readonly />
+      <div class="small">זה הערך שאתה מדביק ל Swagger בשדה features</div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <h2>Request JSON</h2>
+      <pre id="req_preview">{}</pre>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <div class="card" style="flex:1">
+      <h2>Response</h2>
+      <pre id="resp_preview"></pre>
+    </div>
+  </div>
+
+  <div id="features_container" class="row" style="margin-top:12px"></div>
+
+  <script>
+    const CATALOG_URL = "/data/features_catalog.json";
+    const API_URL = "http://127.0.0.1:8000/availability";
+
+    const el = (id) => document.getElementById(id);
+
+    function toNullOrNumber(v) {
+      const s = (v ?? "").toString().trim();
+      if (!s) return null;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toNullOrString(v) {
+      const s = (v ?? "").toString().trim();
+      return s ? s : null;
+    }
+
+    function buildSelectedFeatures() {
+      const checked = Array.from(document.querySelectorAll('input[type="checkbox"][data-key]:checked'));
+      const keys = checked.map(x => x.getAttribute("data-key"));
+      // unique + preserve order
+      const out = [];
+      const seen = new Set();
+      for (const k of keys) {
+        if (!seen.has(k)) {
+          out.push(k);
+          seen.add(k);
+        }
+      }
+      return out.join(",");
+    }
+
+    function buildRequestBody() {
+      const features = el("features_out").value.trim() || null;
+      return {
+        check_in: el("check_in").value.trim(),
+        check_out: el("check_out").value.trim(),
+        adults: toNullOrNumber(el("adults").value),
+        kids: toNullOrNumber(el("kids").value),
+        area: toNullOrString(el("area").value),
+        features: features
+      };
+    }
+
+    function refreshOutputs() {
+      const featuresStr = buildSelectedFeatures();
+      el("features_out").value = featuresStr;
+      const body = buildRequestBody();
+      el("req_preview").textContent = JSON.stringify(body, null, 2);
+    }
+
+    async function loadCatalog() {
+      const r = await fetch(CATALOG_URL, { cache: "no-store" });
+      if (!r.ok) throw new Error("Failed to load catalog: " + r.status);
+      return await r.json();
+    }
+
+    function renderCatalog(catalog) {
+      const cont = el("features_container");
+      cont.innerHTML = "";
+
+      for (const cat of (catalog.categories || [])) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.flex = "1";
+
+        const h = document.createElement("h2");
+        h.textContent = cat.label_he || cat.id || "קטגוריה";
+        card.appendChild(h);
+
+        for (const item of (cat.items || [])) {
+          const lbl = document.createElement("label");
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.setAttribute("data-key", item.key);
+
+          cb.addEventListener("change", refreshOutputs);
+
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(" " + (item.label_he || item.key)));
+          card.appendChild(lbl);
+        }
+
+        cont.appendChild(card);
+      }
+
+      refreshOutputs();
+    }
+
+    async function copyFeatures() {
+      const txt = el("features_out").value.trim();
+      try {
+        await navigator.clipboard.writeText(txt);
+        el("msg").textContent = "הועתק ללוח";
+        el("msg").className = "small ok";
+      } catch {
+        el("msg").textContent = "לא הצלחתי להעתיק. תסמן ידנית ותעתיק";
+        el("msg").className = "small err";
+      }
+      setTimeout(() => { el("msg").textContent = ""; }, 2000);
+    }
+
+    async function postAvailability() {
+      const body = buildRequestBody();
+      el("resp_preview").textContent = "שולח...";
+      try {
+        const r = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+
+        const text = await r.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+
+        el("resp_preview").textContent = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        el("resp_preview").textContent = "שגיאה: " + (e?.message || e);
+      }
+    }
+
+    function wireInputs() {
+      ["check_in","check_out","adults","kids","area"].forEach(id => {
+        el(id).addEventListener("input", refreshOutputs);
+      });
+      el("btn_copy").addEventListener("click", copyFeatures);
+      el("btn_post").addEventListener("click", postAvailability);
+    }
+
+    (async () => {
+      wireInputs();
+      try {
+        const catalog = await loadCatalog();
+        renderCatalog(catalog);
+      } catch (e) {
+        el("resp_preview").textContent = "לא נטען קטלוג: " + (e?.message || e) + "\n\nהערה: צריך לפתוח את הדף דרך שרת שמגיש את /data/features_catalog.json";
+      }
+    })();
+  </script>
+</body>
+</html>
