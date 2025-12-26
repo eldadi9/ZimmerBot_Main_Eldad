@@ -25,6 +25,7 @@ from src.main import (
     normalize_text,
     is_cabin_available,
 )
+from src.pricing import PricingEngine
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
@@ -196,6 +197,37 @@ class BookingResponse(BaseModel):
     message: str
 
 
+class QuoteRequest(BaseModel):
+    cabin_id: str = Field(..., description="Cabin ID to get quote for")
+    check_in: str = Field(..., description="Check-in date/time (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
+    check_out: str = Field(..., description="Check-out date/time (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
+    adults: Optional[int] = Field(None, description="Number of adults")
+    kids: Optional[int] = Field(None, description="Number of kids")
+    addons: Optional[list] = Field(None, description="List of addons (optional)")
+
+
+class QuoteResponse(BaseModel):
+    cabin_id: str
+    cabin_name: Optional[str] = None
+    check_in: str
+    check_out: str
+    nights: int
+    regular_nights: int
+    weekend_nights: int
+    holiday_nights: int
+    high_season_nights: int
+    base_total: float
+    weekend_surcharge: float
+    holiday_surcharge: float
+    high_season_surcharge: float
+    addons_total: float
+    addons: list
+    subtotal: float
+    discount: dict
+    total: float
+    breakdown: list
+
+
 @app.get("/")
 async def root():
     return {
@@ -205,6 +237,7 @@ async def root():
             "health": "/health",
             "cabins": "/cabins",
             "availability": "/availability",
+            "quote": "/quote",
             "book": "/book",
         },
     }
@@ -315,6 +348,68 @@ async def check_availability(request: AvailabilityRequest):
         raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking availability: {str(e)}")
+
+
+@app.post("/quote", response_model=QuoteResponse)
+async def get_quote(request: QuoteRequest):
+    """
+    מחזיר הצעת מחיר מפורטת עם breakdown מלא
+    כולל: עונות, חגים, הנחות, תוספות
+    """
+    try:
+        _, cabins = get_service()
+        
+        # מצא את הצימר
+        chosen = None
+        for cabin in cabins:
+            if normalize_text(cabin.get("cabin_id")).lower() == normalize_text(request.cabin_id).lower():
+                chosen = cabin
+                break
+        
+        if not chosen:
+            raise HTTPException(status_code=404, detail=f"Cabin not found: {request.cabin_id}")
+        
+        # פרס תאריכים
+        check_in_local = parse_datetime_local(request.check_in)
+        check_out_local = parse_datetime_local(request.check_out)
+        
+        # חישוב מחיר מתקדם
+        engine = PricingEngine()
+        pricing = engine.calculate_price_breakdown(
+            cabin=chosen,
+            check_in=check_in_local,
+            check_out=check_out_local,
+            addons=request.addons,
+            apply_discounts=True
+        )
+        
+        return QuoteResponse(
+            cabin_id=request.cabin_id,
+            cabin_name=chosen.get("name"),
+            check_in=request.check_in,
+            check_out=request.check_out,
+            nights=pricing["nights"],
+            regular_nights=pricing["regular_nights"],
+            weekend_nights=pricing["weekend_nights"],
+            holiday_nights=pricing["holiday_nights"],
+            high_season_nights=pricing["high_season_nights"],
+            base_total=pricing["base_total"],
+            weekend_surcharge=pricing["weekend_surcharge"],
+            holiday_surcharge=pricing["holiday_surcharge"],
+            high_season_surcharge=pricing["high_season_surcharge"],
+            addons_total=pricing["addons_total"],
+            addons=pricing["addons"],
+            subtotal=pricing["subtotal"],
+            discount=pricing["discount"],
+            total=pricing["total"],
+            breakdown=pricing["breakdown"]
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating quote: {str(e)}")
 
 
 @app.post("/book", response_model=BookingResponse)

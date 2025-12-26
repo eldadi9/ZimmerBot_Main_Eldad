@@ -274,15 +274,104 @@
        transform: scale(1.2);
      }
     
-    /* Center availability results */
+    /* Layout for availability + pricing table */
     .availability-container {
       display: flex;
-      justify-content: center;
+      gap: 20px;
       margin-top: 24px;
+      align-items: flex-start;
     }
     .availability-card {
-      max-width: 900px;
+      flex: 1;
+      min-width: 400px;
+    }
+    .pricing-card {
+      width: 380px;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .pricing-table {
       width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .pricing-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+    .pricing-table tr:last-child td {
+      border-bottom: none;
+    }
+    .pricing-table .label {
+      color: #666;
+      text-align: right;
+    }
+    .pricing-table .value {
+      color: #2c3e50;
+      font-weight: 500;
+      text-align: left;
+    }
+    .pricing-table .total-row {
+      background: #e8f5e9;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .pricing-table .total-row .label {
+      color: #2c3e50;
+    }
+    .pricing-table .total-row .value {
+      color: #0a7;
+      font-size: 18px;
+    }
+    .pricing-table .discount-row {
+      color: #4CAF50;
+    }
+    .pricing-table .surcharge-row {
+      color: #ff9800;
+    }
+    .addons-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px solid #eee;
+    }
+    .addon-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      margin: 8px 0;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .addon-item:hover {
+      border-color: #2196F3;
+      background: #f5f5f5;
+    }
+    .addon-item.selected {
+      border-color: #2196F3;
+      background: #e3f2fd;
+    }
+    .addon-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-left: 12px;
+      cursor: pointer;
+    }
+    .addon-item label {
+      flex: 1;
+      cursor: pointer;
+      margin: 0;
+      font-weight: 500;
+    }
+    .addon-price {
+      color: #0a7;
+      font-weight: bold;
+      font-size: 16px;
     }
   </style>
 </head>
@@ -386,12 +475,30 @@
       </div>
     </div>
 
-    <!-- תוצאות זמינות במרכז -->
+    <!-- תוצאות זמינות + טבלת מחירים -->
     <div class="availability-container">
       <div class="card availability-card">
         <h2 style="text-align: center;">תוצאות זמינות</h2>
         <div id="availability_results"></div>
         <pre id="resp_preview" style="display:none;"></pre>
+      </div>
+      
+      <!-- טבלת מחירים (מוצגת כשצימר נבחר) -->
+      <div id="pricing_card" class="card pricing-card" style="display: none;">
+        <h2>💰 הצעת מחיר מפורטת</h2>
+        <div id="pricing_table_container"></div>
+        
+        <!-- בחירת Addons -->
+        <div class="addons-section">
+          <h3 style="margin-top: 0; margin-bottom: 12px;">✨ תוספות (Addons)</h3>
+          <div id="addons_container"></div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+          <button id="btn_book_final" class="btn-success" style="width: 100%; padding: 14px; font-size: 16px; display: none;">
+            📅 צור הזמנה
+          </button>
+        </div>
       </div>
     </div>
 
@@ -433,11 +540,22 @@
     const CATALOG_URL = "/data/features_catalog.json";
     const API_BASE = "http://127.0.0.1:8000";
     const AVAILABILITY_URL = `${API_BASE}/availability`;
+    const QUOTE_URL = `${API_BASE}/quote`;
     const BOOKING_URL = `${API_BASE}/book`;
+    
+    // Available addons
+    const AVAILABLE_ADDONS = [
+      { key: "massage", name: "מסאג' לחדר", price: 200 },
+      { key: "chef_meal", name: "ארוחת שף", price: 300 },
+      { key: "morning_tour", name: "טיול בבוקר", price: 150 }
+    ];
 
     const el = (id) => document.getElementById(id);
     
     let availableCabins = [];
+    let selectedCabinId = null;
+    let currentQuote = null;
+    let selectedAddons = [];
 
     function toNullOrNumber(v) {
       const s = (v ?? "").toString().trim();
@@ -654,8 +772,8 @@
               ${cabin.weekend_nights ? `סופ"ש: ${cabin.weekend_nights}` : ''}
             </div>
             <div class="cabin-price">💰 ₪${cabin.total_price?.toFixed(2) || '0.00'}</div>
-            <button class="btn-success" style="margin-top: 12px; width: 100%;" onclick="event.stopPropagation(); openBookingModal('${cabin.cabin_id}')">
-              📅 צור הזמנה
+            <button class="btn-primary" style="margin-top: 12px; width: 100%;" onclick="event.stopPropagation(); selectCabin('${cabin.cabin_id}')">
+              📊 הצג מחיר מפורט
             </button>
           </div>
         `;
@@ -664,7 +782,7 @@
       resultsDiv.innerHTML = html;
     }
     
-    function selectCabin(cabinId) {
+    async function selectCabin(cabinId) {
       // הסר בחירה קודמת
       document.querySelectorAll('.cabin-item').forEach(item => {
         item.classList.remove('selected');
@@ -675,9 +793,263 @@
       if (selected) {
         selected.classList.add('selected');
       }
+      
+      selectedCabinId = cabinId;
+      
+      // הצג טבלת מחירים
+      el("pricing_card").style.display = "block";
+      
+      // טען quote (ללא scroll)
+      await loadQuote(cabinId);
+    }
+    
+    async function loadQuote(cabinId, showLoading = true) {
+      const checkIn = formatDateTimeForAPI(el("check_in").value);
+      const checkOut = formatDateTimeForAPI(el("check_out").value);
+      const adults = toNullOrNumber(el("adults").value);
+      const kids = toNullOrNumber(el("kids").value);
+      
+      if (!checkIn || !checkOut) {
+        el("pricing_table_container").innerHTML = "<div style='color: #c00; padding: 12px;'>יש למלא תאריכי כניסה ויציאה</div>";
+        return;
+      }
+      
+      if (showLoading) {
+        el("pricing_table_container").innerHTML = "<div style='padding: 20px; text-align: center;'>⏳ טוען הצעת מחיר...</div>";
+      }
+      
+      try {
+        const quoteRequest = {
+          cabin_id: cabinId,
+          check_in: checkIn,
+          check_out: checkOut,
+          adults: adults,
+          kids: kids,
+          addons: selectedAddons.length > 0 ? selectedAddons : null
+        };
+        
+        const r = await fetch(QUOTE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(quoteRequest)
+        });
+        
+        const quote = await r.json();
+        
+        if (!r.ok) {
+          throw new Error(quote.detail || "Failed to get quote");
+        }
+        
+        currentQuote = quote;
+        displayPricingTable(quote);
+        renderAddons(); // Re-render to update checkboxes
+        
+      } catch (e) {
+        el("pricing_table_container").innerHTML = `<div style='color: #c00; padding: 12px;'>❌ שגיאה: ${e?.message || e}</div>`;
+      }
+    }
+    
+    function displayPricingTable(quote) {
+      // Helper function to safely format numbers
+      const fmt = (val) => {
+        if (val == null || val === undefined) return '0.00';
+        const num = typeof val === 'number' ? val : parseFloat(val);
+        return isNaN(num) ? '0.00' : num.toFixed(2);
+      };
+      
+      const safeGet = (obj, key, def = 0) => {
+        const val = obj && obj[key];
+        return val != null ? val : def;
+      };
+      
+      const nights = safeGet(quote, 'nights', 0);
+      const regularNights = safeGet(quote, 'regular_nights', 0);
+      const weekendNights = safeGet(quote, 'weekend_nights', 0);
+      const holidayNights = safeGet(quote, 'holiday_nights', 0);
+      const highSeasonNights = safeGet(quote, 'high_season_nights', 0);
+      const baseTotal = safeGet(quote, 'base_total', 0);
+      const weekendSurcharge = safeGet(quote, 'weekend_surcharge', 0);
+      const holidaySurcharge = safeGet(quote, 'holiday_surcharge', 0);
+      const highSeasonSurcharge = safeGet(quote, 'high_season_surcharge', 0);
+      const addonsTotal = safeGet(quote, 'addons_total', 0);
+      const subtotal = safeGet(quote, 'subtotal', 0);
+      const discount = quote && quote.discount ? quote.discount : null;
+      const discountAmount = discount ? safeGet(discount, 'amount', 0) : 0;
+      const discountPercent = discount ? safeGet(discount, 'percent', 0) : 0;
+      const total = safeGet(quote, 'total', safeGet(quote, 'total_price', 0)); // Support both 'total' and 'total_price'
+      
+      let html = `
+        <div style="margin-bottom: 12px; padding: 8px; background: #f5f5f5; border-radius: 6px;">
+          <strong>${quote.cabin_name || quote.cabin_id || 'N/A'}</strong><br/>
+          <small>${quote.check_in || ''} → ${quote.check_out || ''}</small>
+        </div>
+        <table class="pricing-table">
+          <tr>
+            <td class="label">מספר לילות:</td>
+            <td class="value">${nights}</td>
+          </tr>
+          <tr>
+            <td class="label">לילות רגילים:</td>
+            <td class="value">${regularNights}</td>
+          </tr>
+          ${weekendNights > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">לילות סופ"ש:</td>
+            <td class="value">${weekendNights}</td>
+          </tr>
+          ` : ''}
+          ${holidayNights > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">לילות חג:</td>
+            <td class="value">${holidayNights}</td>
+          </tr>
+          ` : ''}
+          ${highSeasonNights > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">לילות עונה גבוהה:</td>
+            <td class="value">${highSeasonNights}</td>
+          </tr>
+          ` : ''}
+          <tr style="border-top: 2px solid #ddd;">
+            <td class="label">מחיר בסיס:</td>
+            <td class="value">₪${fmt(baseTotal)}</td>
+          </tr>
+          ${weekendSurcharge > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">תוספת סופ"ש:</td>
+            <td class="value">+₪${fmt(weekendSurcharge)}</td>
+          </tr>
+          ` : ''}
+          ${holidaySurcharge > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">תוספת חגים:</td>
+            <td class="value">+₪${fmt(holidaySurcharge)}</td>
+          </tr>
+          ` : ''}
+          ${highSeasonSurcharge > 0 ? `
+          <tr class="surcharge-row">
+            <td class="label">תוספת עונה גבוהה:</td>
+            <td class="value">+₪${fmt(highSeasonSurcharge)}</td>
+          </tr>
+          ` : ''}
+          ${addonsTotal > 0 ? `
+          <tr>
+            <td class="label">תוספות:</td>
+            <td class="value">+₪${fmt(addonsTotal)}</td>
+          </tr>
+          ` : ''}
+          <tr style="border-top: 2px solid #ddd;">
+            <td class="label">סה"כ ביניים:</td>
+            <td class="value">₪${fmt(subtotal)}</td>
+          </tr>
+          ${discountAmount > 0 ? `
+          <tr class="discount-row">
+            <td class="label">הנחה (${fmt(discountPercent)}%):</td>
+            <td class="value">-₪${fmt(discountAmount)}</td>
+          </tr>
+          ${discount && discount.reason ? `
+          <tr class="discount-row">
+            <td class="label">סיבת הנחה:</td>
+            <td class="value">${discount.reason}</td>
+          </tr>
+          ` : ''}
+          ` : ''}
+          <tr class="total-row">
+            <td class="label">סה"כ סופי:</td>
+            <td class="value">₪${fmt(total)}</td>
+          </tr>
+        </table>
+      `;
+      
+      el("pricing_table_container").innerHTML = html;
+      el("btn_book_final").style.display = "block";
+    }
+    
+    function renderAddons() {
+      const container = el("addons_container");
+      container.innerHTML = "";
+      
+      AVAILABLE_ADDONS.forEach(addon => {
+        const isSelected = selectedAddons.some(a => a.name === addon.name);
+        const div = document.createElement("div");
+        div.className = `addon-item ${isSelected ? 'selected' : ''}`;
+        div.innerHTML = `
+          <input type="checkbox" id="addon_${addon.key}" ${isSelected ? 'checked' : ''} />
+          <label for="addon_${addon.key}">${addon.name}</label>
+          <span class="addon-price">₪${addon.price}</span>
+        `;
+        
+        // Add event listener properly
+        const checkbox = div.querySelector(`#addon_${addon.key}`);
+        if (checkbox) {
+          checkbox.addEventListener('change', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleAddon(addon.key, addon.price, addon.name);
+          });
+          
+          // Also prevent click propagation on the label
+          const label = div.querySelector(`label[for="addon_${addon.key}"]`);
+          if (label) {
+            label.addEventListener('click', function(e) {
+              e.stopPropagation();
+            });
+          }
+        }
+        container.appendChild(div);
+      });
+    }
+    
+    function toggleAddon(key, price, name) {
+      // Prevent default behavior and stop propagation
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const checkbox = el(`addon_${key}`);
+      if (!checkbox) {
+        console.error(`Checkbox not found: addon_${key}`);
+        return;
+      }
+      
+      const addonItem = { name: name, price: price };
+      
+      if (checkbox.checked) {
+        if (!selectedAddons.some(a => a.name === name)) {
+          selectedAddons.push(addonItem);
+        }
+      } else {
+        selectedAddons = selectedAddons.filter(a => a.name !== name);
+      }
+      
+      // עדכן את ה-visual מיד
+      const item = checkbox.closest('.addon-item');
+      if (item) {
+        if (checkbox.checked) {
+          item.classList.add('selected');
+        } else {
+          item.classList.remove('selected');
+        }
+      }
+      
+      // עדכן את ה-quote עם ה-addons החדשים (ללא scroll, ללא loading message)
+      if (selectedCabinId) {
+        loadQuote(selectedCabinId, false).catch(err => {
+          console.error('Error loading quote:', err);
+        });
+      }
+      
+      return false; // Prevent any default behavior
     }
     
     function openBookingModal(cabinId) {
+      // אם יש quote, השתמש בו
+      if (cabinId && !currentQuote) {
+        selectCabin(cabinId).then(() => {
+          setTimeout(() => openBookingModal(cabinId), 500);
+        });
+        return;
+      }
+      
       el("modal_cabin_id").value = cabinId;
       el("modal_customer").value = "";
       el("modal_phone").value = "";
@@ -699,6 +1071,12 @@
         check_in: formatDateTimeForAPI(el("check_in").value),
         check_out: formatDateTimeForAPI(el("check_out").value)
       };
+      
+      // הוסף addons אם יש
+      if (selectedAddons.length > 0) {
+        bookingJson.addons = selectedAddons;
+      }
+      
       el("modal_json_preview").textContent = JSON.stringify(bookingJson, null, 2);
     }
     
@@ -729,6 +1107,11 @@
         check_in: checkIn,
         check_out: checkOut
       };
+      
+      // הוסף addons אם יש
+      if (selectedAddons.length > 0) {
+        bookingData.addons = selectedAddons;
+      }
       
       el("booking_result").innerHTML = "<div style='padding: 10px;'>⏳ יוצר הזמנה...</div>";
       
@@ -796,6 +1179,21 @@
       el("btn_check_availability").addEventListener("click", checkAvailability);
       el("btn_post").addEventListener("click", checkAvailability); // לשמירת תאימות
       el("bookingForm").addEventListener("submit", createBooking);
+      el("btn_book_final").addEventListener("click", () => {
+        if (selectedCabinId) {
+          openBookingModal(selectedCabinId);
+        }
+      });
+      
+      // עדכן quote כשהתאריכים משתנים
+      ["check_in", "check_out", "adults", "kids"].forEach(id => {
+        const element = el(id);
+        element.addEventListener("change", () => {
+          if (selectedCabinId) {
+            loadQuote(selectedCabinId);
+          }
+        });
+      });
       
       // עדכן את ה-JSON preview כשהשדות משתנים
       ["modal_customer", "modal_phone", "modal_notes"].forEach(id => {
