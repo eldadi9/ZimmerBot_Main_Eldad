@@ -13,7 +13,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 
-
 from src.main import (
     read_cabins_from_sheet,
     build_calendar_service,
@@ -38,6 +37,12 @@ REQUIRED_SCOPES = [
 ]
 
 TOKEN_FILE = "data/token_api.json"
+
+# תצורת תיקיות סטטיות
+TOOLS_DIR = BASE_DIR / "tools"
+DATA_DIR = BASE_DIR / "data"
+TOOLS_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 
 def get_credentials_api():
@@ -99,11 +104,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
-from fastapi.staticfiles import StaticFiles
+# היה אצלך import כפול - משאיר כתיעוד ולא מפעיל
+# from fastapi.staticfiles import StaticFiles
 
-app.mount("/data", StaticFiles(directory=str(BASE_DIR / "data")), name="data")
-app.mount("/tools", StaticFiles(directory=str(BASE_DIR / "tools")), name="tools")
-
+# היה אצלך mount כפול - משאיר כתיעוד ולא מפעיל
+# app.mount("/data", StaticFiles(directory=str(BASE_DIR / "data")), name="data")
+# app.mount("/tools", StaticFiles(directory=str(BASE_DIR / "tools")), name="tools")
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,8 +119,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/data", StaticFiles(directory=str(BASE_DIR / "data")), name="data")
-app.mount("/tools", StaticFiles(directory=str(BASE_DIR / "tools"), html=True), name="tools")
+# mounts פעילים ומסודרים (פעם אחת בלבד)
+# /tools מגיש HTML כלים
+# /data מגיש קבצי JSON (כמו features_catalog.json)
+app.mount("/tools", StaticFiles(directory=str(TOOLS_DIR), html=True), name="tools")
+app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
+
+# היה אצלך mount כפול נוסף - משאיר כתיעוד ולא מפעיל
+# app.mount("/data", StaticFiles(directory=str(BASE_DIR / "data")), name="data")
+# app.mount("/tools", StaticFiles(directory=str(BASE_DIR / "tools"), html=True), name="tools")
 
 _creds = None
 _service = None

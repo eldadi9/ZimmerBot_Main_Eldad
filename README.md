@@ -835,6 +835,49 @@ CREATE TABLE customers (
 - [ ] Constraints מוגדרים
 - [ ] נתוני דמה הוכנסו והוצאו בהצלחה
 
+#### איך לבדוק את שלב 1?
+
+**1. התקן חבילות נדרשות:**
+```bash
+pip install psycopg2-binary python-dotenv
+```
+
+**2. הגדר משתני סביבה (צור קובץ `.env`):**
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=zimmerbot_db
+DB_USER=postgres
+DB_PASSWORD=postgres
+```
+
+**3. צור את מסד הנתונים:**
+```bash
+psql -U postgres
+CREATE DATABASE zimmerbot_db;
+\q
+```
+
+**4. הרץ את סקריפט ה-SQL:**
+```bash
+psql -U postgres -d zimmerbot_db -f database/schema.sql
+```
+
+**5. הרץ את סקריפט הבדיקה:**
+```bash
+# Windows
+database\run_check.bat
+
+# Linux/Mac
+chmod +x database/run_check.sh
+./database/run_check.sh
+
+# או ישירות:
+python database/check_stage1.py
+```
+
+📖 **לפרטים נוספים:** ראה `database/README.md`
+
 ---
 
 ### 📅 שלב 2: חיבור ליומן וזמינות
