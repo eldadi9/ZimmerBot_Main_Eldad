@@ -594,11 +594,12 @@ def get_credentials_api():
     token_path = data_dir / "token_api.json"
 
     # Scopes required for:
-    # - read cabins from Google Sheets
-    # - check availability in Google Calendar
-    # - create booking events in Google Calendar
+    # - read/write Google Sheets (needs full access for gspread.open())
+    # - read Google Drive (for sheets access)
+    # - read/write Google Calendar
     scopes = [
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/calendar",
     ]
 

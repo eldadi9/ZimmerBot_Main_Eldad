@@ -1,4 +1,8 @@
-@echo off
+# Windows
+database\run_check_stage2.bat
+
+# או ישירות:
+python database\check_stage2.py@echo off
 REM סקריפט הרצה לבדיקת שלב 2 - Windows
 
 echo ========================================

@@ -3,82 +3,441 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ZimmerBot - Features Picker</title>
+  <title>ZimmerBot - הזמנת מקום</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 16px; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      margin: 16px; 
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; min-width: 280px; }
-    h2 { margin: 0 0 8px 0; font-size: 16px; }
-    label { display: block; margin: 6px 0; }
-    input[type="text"] { width: 100%; padding: 8px; }
-    button { padding: 8px 12px; cursor: pointer; }
-    pre { background: #111; color: #eee; padding: 10px; border-radius: 8px; overflow: auto; }
-    .small { font-size: 12px; color: #444; }
+    .card { 
+      border: 1px solid #ddd; 
+      border-radius: 12px; 
+      padding: 16px; 
+      min-width: 280px; 
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: box-shadow 0.3s;
+    }
+    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    h1 { 
+      color: #2c3e50; 
+      margin-bottom: 20px; 
+      text-align: center;
+      font-size: 28px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    h2 { margin: 0 0 12px 0; font-size: 18px; color: #34495e; }
+    label { 
+      display: block; 
+      margin: 8px 0 4px 0; 
+      font-weight: 500;
+      color: #555;
+    }
+    input[type="text"], 
+    input[type="number"], 
+    input[type="datetime-local"],
+    select,
+    textarea { 
+      width: 100%; 
+      padding: 10px; 
+      box-sizing: border-box; 
+      font-family: inherit;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input[type="datetime-local"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #2196F3;
+      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    }
+    select {
+      cursor: pointer;
+      background: white;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: left 10px center;
+      padding-right: 10px;
+      padding-left: 35px;
+    }
+    button { 
+      padding: 10px 16px; 
+      cursor: pointer; 
+      margin: 4px; 
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s;
+      border: none;
+    }
+    pre { 
+      background: #1e1e1e; 
+      color: #d4d4d4; 
+      padding: 12px; 
+      border-radius: 8px; 
+      overflow: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .small { font-size: 12px; color: #666; }
     .ok { color: #0a7; }
     .err { color: #c00; }
+    
+    /* Modal styles */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+    .modal-content { 
+      background-color: #fefefe; 
+      margin: 5% auto; 
+      padding: 24px; 
+      border: 1px solid #888; 
+      border-radius: 12px; 
+      width: 80%; 
+      max-width: 600px; 
+      max-height: 80vh; 
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      animation: modalFadeIn 0.3s;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .close:hover { color: black; }
+    
+    /* Available cabins list */
+    .cabin-item { 
+      border: 2px solid #ddd; 
+      border-radius: 8px; 
+      padding: 16px; 
+      margin: 12px 0; 
+      cursor: pointer; 
+      transition: all 0.3s;
+      background: white;
+    }
+    .cabin-item:hover { 
+      background: #f8f9fa; 
+      border-color: #2196F3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .cabin-item.selected { 
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); 
+      border-color: #2196F3;
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+    .cabin-name { 
+      font-weight: bold; 
+      font-size: 18px; 
+      margin-bottom: 8px; 
+      color: #2c3e50;
+    }
+    .cabin-details { 
+      font-size: 14px; 
+      color: #666; 
+      margin-bottom: 8px;
+    }
+    .cabin-price { 
+      font-size: 20px; 
+      color: #0a7; 
+      font-weight: bold; 
+      margin-top: 12px;
+      padding: 8px;
+      background: #e8f5e9;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    
+    .btn-primary { 
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); 
+      color: white; 
+      border: none;
+      box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
+    }
+    .btn-primary:hover { 
+      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-success { 
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); 
+      color: white; 
+      border: none;
+      box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+    }
+    .btn-success:hover { 
+      background: linear-gradient(135deg, #45a049 0%, #388e3c 100%);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); 
+      color: white; 
+      border: none;
+      box-shadow: 0 2px 6px rgba(244, 67, 54, 0.3);
+    }
+    .btn-danger:hover { 
+      background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%);
+      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+      transform: translateY(-1px);
+    }
+    
+     /* Features dropdowns - שורה אחת */
+     .features-container {
+       margin-top: 8px;
+       display: flex;
+       flex-wrap: wrap;
+       gap: 8px;
+       align-items: flex-start;
+     }
+     .feature-dropdown {
+       position: relative;
+       display: inline-block;
+     }
+     .feature-dropdown-btn {
+       display: inline-flex;
+       align-items: center;
+       padding: 8px 16px;
+       background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+       color: white;
+       border: 2px solid #1976D2;
+       border-radius: 20px;
+       cursor: pointer;
+       transition: all 0.2s;
+       font-size: 13px;
+       font-weight: 500;
+       white-space: nowrap;
+       user-select: none;
+       box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
+     }
+     .feature-dropdown-btn:hover {
+       background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+       box-shadow: 0 3px 8px rgba(33, 150, 243, 0.4);
+       transform: translateY(-1px);
+     }
+     .feature-dropdown-btn::after {
+       content: "▼";
+       margin-right: 6px;
+       font-size: 10px;
+       transition: transform 0.2s;
+     }
+     .feature-dropdown-btn.active::after {
+       transform: rotate(180deg);
+     }
+     .feature-dropdown-content {
+       display: none;
+       position: absolute;
+       top: 100%;
+       right: 0;
+       margin-top: 4px;
+       background: white;
+       border: 2px solid #2196F3;
+       border-radius: 8px;
+       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+       min-width: 200px;
+       max-width: 300px;
+       max-height: 400px;
+       overflow-y: auto;
+       z-index: 1000;
+       padding: 8px;
+     }
+     .feature-dropdown-content.active {
+       display: block;
+     }
+     .feature-dropdown-content label {
+       display: flex;
+       align-items: center;
+       padding: 8px 12px;
+       margin: 2px 0;
+       border-radius: 4px;
+       cursor: pointer;
+       transition: background 0.2s;
+       font-size: 13px;
+     }
+     .feature-dropdown-content label:hover {
+       background: #f5f5f5;
+     }
+     .feature-dropdown-content input[type="checkbox"] {
+       width: auto;
+       margin-left: 8px;
+       cursor: pointer;
+       transform: scale(1.2);
+     }
+    
+    /* Center availability results */
+    .availability-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 24px;
+    }
+    .availability-card {
+      max-width: 900px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
-  <h1>ZimmerBot - בחירת Features</h1>
+  <div class="container">
+    <h1>🏡 ZimmerBot - הזמנת מקום</h1>
 
-  <div class="card">
-    <div class="row">
-      <div style="min-width:260px">
-        <label>Check-in (YYYY-MM-DD HH:MM)</label>
-        <input id="check_in" type="text" value="2026-02-01 15:00" />
+    <div class="card">
+      <div class="row">
+        <div style="min-width:260px">
+          <label>📅 תאריך ושעת כניסה (Check-in)</label>
+          <input id="check_in" type="datetime-local" value="2026-02-01T15:00" />
+        </div>
+        <div style="min-width:260px">
+          <label>📅 תאריך ושעת יציאה (Check-out)</label>
+          <input id="check_out" type="datetime-local" value="2026-02-02T11:00" />
+        </div>
+        <div style="min-width:160px">
+          <label>👥 מבוגרים (Adults)</label>
+          <select id="adults">
+            <option value="">לא נבחר</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div style="min-width:160px">
+          <label>👶 ילדים (Kids)</label>
+          <select id="kids">
+            <option value="">לא נבחר</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div style="min-width:220px">
+          <label>📍 אזור (Area)</label>
+          <input id="area" type="text" value="" placeholder="הזן אזור (אופציונלי)" />
+        </div>
       </div>
-      <div style="min-width:260px">
-        <label>Check-out (YYYY-MM-DD HH:MM)</label>
-        <input id="check_out" type="text" value="2026-02-02 11:00" />
-      </div>
-      <div style="min-width:140px">
-        <label>Adults</label>
-        <input id="adults" type="text" value="" placeholder="null" />
-      </div>
-      <div style="min-width:140px">
-        <label>Kids</label>
-        <input id="kids" type="text" value="" placeholder="null" />
-      </div>
-      <div style="min-width:220px">
-        <label>Area</label>
-        <input id="area" type="text" value="" placeholder="null" />
+
+      <div style="margin-top:16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <button id="btn_copy" style="background: #6c757d; color: white;">📋 העתק Features</button>
+        <button id="btn_check_availability" class="btn-primary">🔍 בדוק זמינות</button>
+        <button id="btn_post" style="display:none;">שלח POST ל /availability</button>
+        <span id="msg" class="small" style="flex: 1;"></span>
       </div>
     </div>
 
-    <div style="margin-top:10px">
-      <button id="btn_copy">העתק Features</button>
-      <button id="btn_post">שלח POST ל /availability</button>
-      <span id="msg" class="small"></span>
+     <!-- Features בחירה - שורה אחת -->
+     <div class="card" style="margin-top:12px">
+       <h2 style="margin-bottom: 8px;">✨ בחר Features (תכונות רצויות)</h2>
+       <div id="features_container" class="features-container"></div>
+     </div>
+
+    <div class="row" style="margin-top:12px">
+      <div class="card" style="flex:1">
+        <h2>Features שנבחרו</h2>
+        <input id="features_out" type="text" readonly />
+        <div class="small">זה הערך שאתה מדביק ל Swagger בשדה features</div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <h2>Request JSON</h2>
+        <pre id="req_preview">{}</pre>
+      </div>
+    </div>
+
+    <!-- תוצאות זמינות במרכז -->
+    <div class="availability-container">
+      <div class="card availability-card">
+        <h2 style="text-align: center;">תוצאות זמינות</h2>
+        <div id="availability_results"></div>
+        <pre id="resp_preview" style="display:none;"></pre>
+      </div>
+    </div>
+
+    <!-- Modal להזמנה -->
+    <div id="bookingModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>יצירת הזמנה</h2>
+        
+        <div style="margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+          <strong>JSON Request:</strong>
+          <pre id="modal_json_preview" style="background: #111; color: #eee; padding: 10px; border-radius: 4px; margin-top: 8px; font-size: 12px; overflow-x: auto;"></pre>
+        </div>
+        
+        <form id="bookingForm">
+          <label>צימר (Cabin ID):</label>
+          <input type="text" id="modal_cabin_id" required readonly />
+          
+          <label>שם הלקוח:</label>
+          <input type="text" id="modal_customer" required placeholder="ישראל ישראלי" />
+          
+          <label>טלפון:</label>
+          <input type="text" id="modal_phone" placeholder="050-1234567" />
+          
+          <label>הערות:</label>
+          <textarea id="modal_notes" rows="3" placeholder="הערות נוספות..."></textarea>
+          
+          <div style="margin-top: 16px;">
+            <button type="submit" class="btn-success">✅ צור הזמנה</button>
+            <button type="button" class="btn-danger" onclick="closeBookingModal()">ביטול</button>
+          </div>
+        </form>
+        <div id="booking_result" style="margin-top: 16px;"></div>
+      </div>
     </div>
   </div>
-
-  <div class="row" style="margin-top:12px">
-    <div class="card" style="flex:1">
-      <h2>Features שנבחרו</h2>
-      <input id="features_out" type="text" readonly />
-      <div class="small">זה הערך שאתה מדביק ל Swagger בשדה features</div>
-    </div>
-
-    <div class="card" style="flex:1">
-      <h2>Request JSON</h2>
-      <pre id="req_preview">{}</pre>
-    </div>
-  </div>
-
-  <div class="row" style="margin-top:12px">
-    <div class="card" style="flex:1">
-      <h2>Response</h2>
-      <pre id="resp_preview"></pre>
-    </div>
-  </div>
-
-  <div id="features_container" class="row" style="margin-top:12px"></div>
 
   <script>
     const CATALOG_URL = "/data/features_catalog.json";
-    const API_URL = "http://127.0.0.1:8000/availability";
+    const API_BASE = "http://127.0.0.1:8000";
+    const AVAILABILITY_URL = `${API_BASE}/availability`;
+    const BOOKING_URL = `${API_BASE}/book`;
 
     const el = (id) => document.getElementById(id);
+    
+    let availableCabins = [];
 
     function toNullOrNumber(v) {
       const s = (v ?? "").toString().trim();
@@ -107,11 +466,20 @@
       return out.join(",");
     }
 
+    function formatDateTimeForAPI(datetimeLocal) {
+      // Convert from "YYYY-MM-DDTHH:MM" to "YYYY-MM-DD HH:MM"
+      if (!datetimeLocal) return "";
+      return datetimeLocal.replace("T", " ");
+    }
+
     function buildRequestBody() {
       const features = el("features_out").value.trim() || null;
+      const checkInValue = el("check_in").value;
+      const checkOutValue = el("check_out").value;
+      
       return {
-        check_in: el("check_in").value.trim(),
-        check_out: el("check_out").value.trim(),
+        check_in: formatDateTimeForAPI(checkInValue),
+        check_out: formatDateTimeForAPI(checkOutValue),
         adults: toNullOrNumber(el("adults").value),
         kids: toNullOrNumber(el("kids").value),
         area: toNullOrString(el("area").value),
@@ -136,29 +504,68 @@
       const cont = el("features_container");
       cont.innerHTML = "";
 
+      // יצירת dropdown לכל קטגוריה - הכל בשורה אחת
       for (const cat of (catalog.categories || [])) {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.style.flex = "1";
-
-        const h = document.createElement("h2");
-        h.textContent = cat.label_he || cat.id || "קטגוריה";
-        card.appendChild(h);
-
+        const dropdown = document.createElement("div");
+        dropdown.className = "feature-dropdown";
+        
+        // כפתור הכותרת
+        const btn = document.createElement("button");
+        btn.className = "feature-dropdown-btn";
+        btn.type = "button";
+        btn.textContent = cat.label_he || cat.id || "קטגוריה";
+        
+        // תוכן ה-dropdown
+        const content = document.createElement("div");
+        content.className = "feature-dropdown-content";
+        
+        // יצירת checkboxes לכל תכונה בקטגוריה
         for (const item of (cat.items || [])) {
           const lbl = document.createElement("label");
+          
           const cb = document.createElement("input");
           cb.type = "checkbox";
           cb.setAttribute("data-key", item.key);
-
+          cb.id = `feature_${item.key}`;
           cb.addEventListener("change", refreshOutputs);
-
+          
+          const text = document.createTextNode(item.label_he || item.key);
+          
           lbl.appendChild(cb);
-          lbl.appendChild(document.createTextNode(" " + (item.label_he || item.key)));
-          card.appendChild(lbl);
+          lbl.appendChild(text);
+          content.appendChild(lbl);
         }
-
-        cont.appendChild(card);
+        
+        // טיפול בלחיצה על הכפתור - פתיחה/סגירה
+        btn.addEventListener("click", function(e) {
+          e.stopPropagation();
+          
+          const isActive = content.classList.contains("active");
+          const allContents = document.querySelectorAll(".feature-dropdown-content");
+          const allButtons = document.querySelectorAll(".feature-dropdown-btn");
+          
+          // סגור את כל ה-dropdowns האחרים
+          allContents.forEach(c => c.classList.remove("active"));
+          allButtons.forEach(b => b.classList.remove("active"));
+          
+          // פתח/סגור את הנוכחי
+          if (!isActive) {
+            content.classList.add("active");
+            btn.classList.add("active");
+          }
+        });
+        
+        // סגור dropdown בלחיצה מחוץ לו
+        document.addEventListener("click", function(e) {
+          if (!dropdown.contains(e.target)) {
+            content.classList.remove("active");
+            btn.classList.remove("active");
+          }
+        });
+        
+        dropdown.appendChild(btn);
+        dropdown.appendChild(content);
+        cont.appendChild(dropdown);
       }
 
       refreshOutputs();
@@ -177,11 +584,16 @@
       setTimeout(() => { el("msg").textContent = ""; }, 2000);
     }
 
-    async function postAvailability() {
+    async function checkAvailability() {
       const body = buildRequestBody();
+      const resultsDiv = el("availability_results");
+      resultsDiv.innerHTML = "<div style='padding: 20px; text-align: center;'>🔍 בודק זמינות...</div>";
+      
+      // גם עדכן את ה-preview
       el("resp_preview").textContent = "שולח...";
+      
       try {
-        const r = await fetch(API_URL, {
+        const r = await fetch(AVAILABILITY_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
@@ -191,18 +603,204 @@
         let parsed;
         try { parsed = JSON.parse(text); } catch { parsed = text; }
 
+        // עדכן את ה-preview (JSON גולמי)
         el("resp_preview").textContent = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+        
+        // שמור את התוצאות
+        availableCabins = Array.isArray(parsed) ? parsed : [];
+        
+        // הצג תוצאות יפות
+        displayAvailabilityResults(availableCabins);
+        
+        // גלול אוטומטית לתוצאות
+        setTimeout(() => {
+          const availabilityCard = document.querySelector('.availability-card');
+          if (availabilityCard) {
+            availabilityCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+        
+        // עדכן הודעה
+        el("msg").textContent = `נמצאו ${availableCabins.length} צימרים זמינים`;
+        el("msg").className = "small ok";
+        setTimeout(() => { el("msg").textContent = ""; }, 3000);
+        
       } catch (e) {
+        resultsDiv.innerHTML = `<div style='color: #c00; padding: 20px;'>❌ שגיאה: ${e?.message || e}</div>`;
         el("resp_preview").textContent = "שגיאה: " + (e?.message || e);
+        el("msg").textContent = "שגיאה בבדיקת זמינות";
+        el("msg").className = "small err";
       }
     }
+    
+    function displayAvailabilityResults(cabins) {
+      const resultsDiv = el("availability_results");
+      
+      if (!cabins || cabins.length === 0) {
+        resultsDiv.innerHTML = "<div style='padding: 20px; text-align: center; color: #c00;'>❌ לא נמצאו צימרים זמינים בתאריכים המבוקשים</div>";
+        return;
+      }
+      
+      let html = `<div style='margin-bottom: 12px;'><strong>נמצאו ${cabins.length} צימרים זמינים:</strong></div>`;
+      
+      cabins.forEach((cabin, index) => {
+        html += `
+          <div class="cabin-item" data-cabin-id="${cabin.cabin_id}" onclick="selectCabin('${cabin.cabin_id}')">
+            <div class="cabin-name">${cabin.name || cabin.cabin_id}</div>
+            <div class="cabin-details">
+              ${cabin.area ? `📍 ${cabin.area} | ` : ''}
+              ${cabin.nights ? `${cabin.nights} לילות | ` : ''}
+              ${cabin.regular_nights ? `רגיל: ${cabin.regular_nights} | ` : ''}
+              ${cabin.weekend_nights ? `סופ"ש: ${cabin.weekend_nights}` : ''}
+            </div>
+            <div class="cabin-price">💰 ₪${cabin.total_price?.toFixed(2) || '0.00'}</div>
+            <button class="btn-success" style="margin-top: 12px; width: 100%;" onclick="event.stopPropagation(); openBookingModal('${cabin.cabin_id}')">
+              📅 צור הזמנה
+            </button>
+          </div>
+        `;
+      });
+      
+      resultsDiv.innerHTML = html;
+    }
+    
+    function selectCabin(cabinId) {
+      // הסר בחירה קודמת
+      document.querySelectorAll('.cabin-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      
+      // סמן את הנבחר
+      const selected = document.querySelector(`[data-cabin-id="${cabinId}"]`);
+      if (selected) {
+        selected.classList.add('selected');
+      }
+    }
+    
+    function openBookingModal(cabinId) {
+      el("modal_cabin_id").value = cabinId;
+      el("modal_customer").value = "";
+      el("modal_phone").value = "";
+      el("modal_notes").value = "";
+      el("booking_result").innerHTML = "";
+      
+      // עדכן את ה-JSON preview
+      updateBookingJson();
+      
+      el("bookingModal").style.display = "block";
+    }
+    
+    function updateBookingJson() {
+      const bookingJson = {
+        cabin_id: el("modal_cabin_id").value,
+        customer: el("modal_customer").value || null,
+        phone: el("modal_phone").value.trim() || null,
+        notes: el("modal_notes").value.trim() || null,
+        check_in: formatDateTimeForAPI(el("check_in").value),
+        check_out: formatDateTimeForAPI(el("check_out").value)
+      };
+      el("modal_json_preview").textContent = JSON.stringify(bookingJson, null, 2);
+    }
+    
+    function closeBookingModal() {
+      el("bookingModal").style.display = "none";
+    }
+    
+    async function createBooking(event) {
+      event.preventDefault();
+      
+      const cabinId = el("modal_cabin_id").value;
+      const customer = el("modal_customer").value;
+      const phone = el("modal_phone").value;
+      const notes = el("modal_notes").value;
+      const checkIn = formatDateTimeForAPI(el("check_in").value);
+      const checkOut = formatDateTimeForAPI(el("check_out").value);
+      
+      if (!cabinId || !customer || !checkIn || !checkOut) {
+        el("booking_result").innerHTML = "<div style='color: #c00; padding: 10px; background: #ffebee; border-radius: 4px;'>❌ יש למלא את כל השדות הנדרשים</div>";
+        return;
+      }
+      
+      const bookingData = {
+        cabin_id: cabinId,
+        customer: customer,
+        phone: phone || null,
+        notes: notes || null,
+        check_in: checkIn,
+        check_out: checkOut
+      };
+      
+      el("booking_result").innerHTML = "<div style='padding: 10px;'>⏳ יוצר הזמנה...</div>";
+      
+      try {
+        const r = await fetch(BOOKING_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bookingData)
+        });
+        
+        const text = await r.text();
+        let result;
+        try { result = JSON.parse(text); } catch { result = { error: text }; }
+        
+        if (r.ok && result.success) {
+          el("booking_result").innerHTML = `
+            <div style='color: #0a7; padding: 10px; background: #e8f5e9; border-radius: 4px;'>
+              ✅ <strong>הזמנה נוצרה בהצלחה!</strong><br/>
+              Event ID: ${result.event_id || 'N/A'}<br/>
+              ${result.event_link ? `<a href="${result.event_link}" target="_blank">🔗 פתח ביומן Google</a>` : ''}
+            </div>
+          `;
+          
+          // סגור את החלון אחרי 3 שניות
+          setTimeout(() => {
+            closeBookingModal();
+            // רענן זמינות
+            checkAvailability();
+          }, 3000);
+        } else {
+          el("booking_result").innerHTML = `
+            <div style='color: #c00; padding: 10px; background: #ffebee; border-radius: 4px;'>
+              ❌ <strong>שגיאה ביצירת הזמנה:</strong><br/>
+              ${result.detail || result.message || JSON.stringify(result)}
+            </div>
+          `;
+        }
+      } catch (e) {
+        el("booking_result").innerHTML = `
+          <div style='color: #c00; padding: 10px; background: #ffebee; border-radius: 4px;'>
+            ❌ <strong>שגיאה:</strong> ${e?.message || e}
+          </div>
+        `;
+      }
+    }
+    
+    // סגירת modal בלחיצה על X או מחוץ לחלון
+    window.onclick = function(event) {
+      const modal = el("bookingModal");
+      if (event.target == modal) {
+        closeBookingModal();
+      }
+    }
+    
+    document.querySelector('.close').onclick = closeBookingModal;
 
     function wireInputs() {
       ["check_in","check_out","adults","kids","area"].forEach(id => {
-        el(id).addEventListener("input", refreshOutputs);
+        const element = el(id);
+        // Use 'change' for select, 'input' for text inputs
+        const eventType = element.tagName === "SELECT" ? "change" : "input";
+        element.addEventListener(eventType, refreshOutputs);
       });
       el("btn_copy").addEventListener("click", copyFeatures);
-      el("btn_post").addEventListener("click", postAvailability);
+      el("btn_check_availability").addEventListener("click", checkAvailability);
+      el("btn_post").addEventListener("click", checkAvailability); // לשמירת תאימות
+      el("bookingForm").addEventListener("submit", createBooking);
+      
+      // עדכן את ה-JSON preview כשהשדות משתנים
+      ["modal_customer", "modal_phone", "modal_notes"].forEach(id => {
+        el(id).addEventListener("input", updateBookingJson);
+      });
     }
 
     (async () => {
