@@ -26,6 +26,16 @@ from src.main import (
     is_cabin_available,
 )
 from src.pricing import PricingEngine
+from src.db import (
+    read_cabins_from_db,
+    save_customer_to_db,
+    save_booking_to_db,
+    get_cabin_by_id,
+    save_audit_log,
+    save_transaction,
+    save_quote,
+)
+from src.hold import get_hold_manager
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
@@ -136,13 +146,21 @@ _cabins = None
 
 
 def get_service():
+    """
+    Get calendar service and cabins
+    Tries DB first, falls back to Google Sheets if DB unavailable
+    """
     global _creds, _service, _cabins
     if _creds is None:
         _creds = get_credentials_api()
     if _service is None:
         _service = build_calendar_service(_creds)
     if _cabins is None:
-        _cabins = read_cabins_from_sheet(_creds)
+        # Try DB first, fallback to Sheets
+        _cabins = read_cabins_from_db()
+        if not _cabins:
+            # Fallback to Google Sheets
+            _cabins = read_cabins_from_sheet(_creds)
     return _service, _cabins
 
 
@@ -162,6 +180,11 @@ class BookingRequest(BaseModel):
     customer: str = Field(..., description="Customer name")
     phone: Optional[str] = Field(None, description="Customer phone")
     notes: Optional[str] = Field(None, description="Additional notes")
+    email: Optional[str] = Field(None, description="Customer email")
+    adults: Optional[int] = Field(None, description="Number of adults")
+    kids: Optional[int] = Field(None, description="Number of kids")
+    total_price: Optional[float] = Field(None, description="Total price")
+    hold_id: Optional[str] = Field(None, description="Hold ID to convert to booking")
 
 
 class CabinInfo(BaseModel):
@@ -238,7 +261,13 @@ async def root():
             "cabins": "/cabins",
             "availability": "/availability",
             "quote": "/quote",
+            "hold": "/hold",
             "book": "/book",
+            "admin": {
+                "bookings": "/admin/bookings",
+                "booking_by_id": "/admin/bookings/{id}",
+                "audit": "/admin/audit",
+            },
         },
     }
 
@@ -343,6 +372,24 @@ async def check_availability(request: AvailabilityRequest):
                 )
             )
 
+        # Save audit log for availability search
+        import uuid
+        search_id = str(uuid.uuid4())
+        save_audit_log(
+            table_name="availability_search",
+            record_id=search_id,
+            action="SEARCH",
+            new_values={
+                "check_in": request.check_in,
+                "check_out": request.check_out,
+                "adults": request.adults,
+                "kids": request.kids,
+                "area": request.area,
+                "features": request.features,
+                "results_count": len(result)
+            }
+        )
+
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
@@ -361,13 +408,20 @@ async def get_quote(request: QuoteRequest):
         
         # מצא את הצימר
         chosen = None
+        request_cabin_id_normalized = normalize_text(request.cabin_id).lower()
         for cabin in cabins:
-            if normalize_text(cabin.get("cabin_id")).lower() == normalize_text(request.cabin_id).lower():
+            cabin_id_normalized = normalize_text(cabin.get("cabin_id")).lower()
+            if cabin_id_normalized == request_cabin_id_normalized:
                 chosen = cabin
                 break
         
         if not chosen:
-            raise HTTPException(status_code=404, detail=f"Cabin not found: {request.cabin_id}")
+            # Log available cabin_ids for debugging
+            available_ids = [normalize_text(c.get("cabin_id")) for c in cabins[:5]]  # First 5 for debugging
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Cabin not found: {request.cabin_id}. Available IDs (sample): {available_ids}"
+            )
         
         # פרס תאריכים
         check_in_local = parse_datetime_local(request.check_in)
@@ -383,7 +437,7 @@ async def get_quote(request: QuoteRequest):
             apply_discounts=True
         )
         
-        return QuoteResponse(
+        quote_response = QuoteResponse(
             cabin_id=request.cabin_id,
             cabin_name=chosen.get("name"),
             check_in=request.check_in,
@@ -404,6 +458,23 @@ async def get_quote(request: QuoteRequest):
             total=pricing["total"],
             breakdown=pricing["breakdown"]
         )
+        
+        # Optionally save quote to database
+        try:
+            save_quote(
+                cabin_id=request.cabin_id,
+                check_in=request.check_in,
+                check_out=request.check_out,
+                adults=request.adults,
+                kids=request.kids,
+                total_price=pricing["total"],
+                quote_data=pricing
+            )
+        except Exception as e:
+            # Don't fail if quote save fails
+            print(f"Warning: Could not save quote: {e}")
+        
+        return quote_response
     except HTTPException:
         raise
     except ValueError as e:
@@ -414,6 +485,11 @@ async def get_quote(request: QuoteRequest):
 
 @app.post("/book", response_model=BookingResponse)
 async def book_cabin(request: BookingRequest):
+    """
+    Create a confirmed booking
+    If hold_id is provided, converts the hold to a booking
+    Otherwise, creates a new booking (with hold check)
+    """
     try:
         service, cabins = get_service()
 
@@ -422,6 +498,7 @@ async def book_cabin(request: BookingRequest):
         check_in_utc = to_utc(check_in_local)
         check_out_utc = to_utc(check_out_local)
 
+        # Find cabin
         chosen = None
         for cabin in cabins:
             if normalize_text(cabin.get("cabin_id")).lower() == normalize_text(request.cabin_id).lower():
@@ -435,6 +512,30 @@ async def book_cabin(request: BookingRequest):
         if not cal_id:
             raise HTTPException(status_code=400, detail=f"Cabin {request.cabin_id} missing calendar_id")
 
+        # Check for hold if hold_id provided
+        hold_manager = get_hold_manager()
+        hold_id = request.hold_id
+        
+        if hold_id:
+            # Verify hold exists and matches booking
+            hold_data = hold_manager.get_hold(hold_id)
+            if not hold_data:
+                raise HTTPException(status_code=404, detail="Hold not found or expired")
+            
+            if hold_data["cabin_id"] != request.cabin_id:
+                raise HTTPException(status_code=400, detail="Hold cabin_id does not match booking")
+            
+            # Convert hold to booking
+            hold_manager.convert_hold_to_booking(hold_id)
+        else:
+            # Check if cabin is on hold
+            if hold_manager.check_hold_exists(request.cabin_id, request.check_in, request.check_out):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cabin is on hold. Please use the hold_id to complete booking.",
+                )
+
+        # Check availability in calendar
         is_available, conflicts = is_cabin_available(service, cal_id, check_in_utc, check_out_utc)
         if not is_available:
             raise HTTPException(
@@ -446,6 +547,14 @@ async def book_cabin(request: BookingRequest):
         phone = request.phone or ""
         notes = request.notes or ""
 
+        # Save customer to DB
+        customer_id = save_customer_to_db(
+            name=customer,
+            email=request.email,
+            phone=phone,
+        )
+
+        # Create calendar event first (to get event_id and event_link)
         summary = f"הזמנה | {customer}"
         desc_lines = [
             f"Cabin: {request.cabin_id}",
@@ -466,12 +575,58 @@ async def book_cabin(request: BookingRequest):
             end_local=check_out_local,
             description=description,
         )
+        
+        event_id = created.get("id")
+        event_link = created.get("htmlLink")
+
+        # Save booking to DB (with event_id and event_link)
+        booking_id = save_booking_to_db(
+            cabin_id=chosen.get("cabin_id"),
+            customer_id=customer_id,
+            check_in=check_in_local.date().isoformat(),
+            check_out=check_out_local.date().isoformat(),
+            adults=request.adults,
+            kids=request.kids,
+            total_price=request.total_price,
+            status="confirmed",
+            event_id=event_id,
+            event_link=event_link,
+        )
+        
+        # Save transaction (pending status)
+        if booking_id:
+            transaction_id = save_transaction(
+                booking_id=booking_id,
+                amount=request.total_price or 0.0,
+                status="pending",
+                payment_method=None
+            )
+        
+        # Save audit log for booking
+        if booking_id:
+            save_audit_log(
+                table_name="bookings",
+                record_id=booking_id,
+                action="INSERT",
+                new_values={
+                    "cabin_id": request.cabin_id,
+                    "customer_id": customer_id,
+                    "check_in": check_in_local.date().isoformat(),
+                    "check_out": check_out_local.date().isoformat(),
+                    "adults": request.adults,
+                    "kids": request.kids,
+                    "total_price": request.total_price,
+                    "status": "confirmed",
+                    "event_id": event_id,
+                    "event_link": event_link
+                }
+            )
 
         return BookingResponse(
             success=True,
             cabin_id=request.cabin_id,
-            event_id=created.get("id"),
-            event_link=created.get("htmlLink"),
+            event_id=event_id,
+            event_link=event_link,
             message="Booking created successfully",
         )
     except HTTPException:
@@ -480,6 +635,215 @@ async def book_cabin(request: BookingRequest):
         raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating booking: {str(e)}")
+
+
+# ============================================
+# Admin API Endpoints
+# ============================================
+
+@app.get("/admin/bookings")
+async def get_all_bookings(
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """
+    Get all bookings (admin endpoint)
+    """
+    try:
+        from src.db import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        import psycopg2
+        
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                
+                query = """
+                    SELECT 
+                        b.id::text as booking_id,
+                        b.cabin_id::text as cabin_id,
+                        c.name as cabin_name,
+                        b.customer_id::text as customer_id,
+                        cust.name as customer_name,
+                        cust.email as customer_email,
+                        cust.phone as customer_phone,
+                        b.check_in,
+                        b.check_out,
+                        b.adults,
+                        b.kids,
+                        b.status,
+                        b.total_price,
+                        b.event_id,
+                        b.event_link,
+                        b.created_at,
+                        b.updated_at
+                    FROM bookings b
+                    LEFT JOIN cabins c ON b.cabin_id = c.id
+                    LEFT JOIN customers cust ON b.customer_id = cust.id
+                """
+                
+                params = []
+                if status:
+                    query += " WHERE b.status = %s"
+                    params.append(status)
+                
+                query += " ORDER BY b.created_at DESC LIMIT %s OFFSET %s"
+                params.extend([limit, offset])
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                return [dict(row) for row in rows]
+        except psycopg2.OperationalError as db_error:
+            # Database not available - return empty list
+            print(f"Warning: Database not available for /admin/bookings: {db_error}")
+            return []
+            
+    except Exception as e:
+        print(f"Error in /admin/bookings: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching bookings: {str(e)}")
+
+
+@app.get("/admin/bookings/{booking_id}")
+async def get_booking_by_id(booking_id: str):
+    """
+    Get booking by ID (admin endpoint)
+    """
+    try:
+        from src.db import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        import uuid
+        
+        # Validate UUID
+        try:
+            uuid.UUID(booking_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid booking ID format")
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT 
+                    b.id::text as booking_id,
+                    b.cabin_id::text as cabin_id,
+                    c.name as cabin_name,
+                    c.area as cabin_area,
+                    b.customer_id::text as customer_id,
+                    cust.name as customer_name,
+                    cust.email as customer_email,
+                    cust.phone as customer_phone,
+                    b.check_in,
+                    b.check_out,
+                    b.adults,
+                    b.kids,
+                    b.status,
+                    b.total_price,
+                    b.event_id,
+                    b.event_link,
+                    b.created_at,
+                    b.updated_at
+                FROM bookings b
+                LEFT JOIN cabins c ON b.cabin_id = c.id
+                LEFT JOIN customers cust ON b.customer_id = cust.id
+                WHERE b.id = %s::uuid
+            """, (booking_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Booking not found")
+            
+            # Get transactions for this booking
+            cursor.execute("""
+                SELECT 
+                    id::text as transaction_id,
+                    payment_id,
+                    amount,
+                    currency,
+                    status,
+                    payment_method,
+                    created_at,
+                    updated_at
+                FROM transactions
+                WHERE booking_id = %s::uuid
+                ORDER BY created_at DESC
+            """, (booking_id,))
+            
+            transactions = [dict(row) for row in cursor.fetchall()]
+            
+            booking = dict(row)
+            booking["transactions"] = transactions
+            
+            return booking
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching booking: {str(e)}")
+
+
+@app.get("/admin/audit")
+async def get_audit_logs(
+    table_name: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """
+    Get audit logs (admin endpoint)
+    """
+    try:
+        from src.db import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        import psycopg2
+        
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                
+                query = """
+                    SELECT 
+                        id::text as audit_id,
+                        table_name,
+                        record_id::text as record_id,
+                        action,
+                        old_values,
+                        new_values,
+                        user_id::text as user_id,
+                        created_at
+                    FROM audit_log
+                """
+                
+                conditions = []
+                params = []
+                
+                if table_name:
+                    conditions.append("table_name = %s")
+                    params.append(table_name)
+                
+                if action:
+                    conditions.append("action = %s")
+                    params.append(action)
+                
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                
+                query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+                params.extend([limit, offset])
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                return [dict(row) for row in rows]
+        except psycopg2.OperationalError as db_error:
+            # Database not available - return empty list
+            print(f"Warning: Database not available for /admin/audit: {db_error}")
+            return []
+            
+    except Exception as e:
+        print(f"Error in /admin/audit: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching audit logs: {str(e)}")
 
 
 if __name__ == "__main__":

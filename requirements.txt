@@ -26,3 +26,4 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 psycopg2-binary==2.9.9
+redis==5.0.1

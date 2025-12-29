@@ -38,9 +38,24 @@ CREATE TABLE IF NOT EXISTS bookings (
     kids INT,
     status VARCHAR(20) CHECK (status IN ('hold', 'confirmed', 'cancelled')),
     total_price DECIMAL(10,2),
+    event_id VARCHAR(255), -- Google Calendar event ID
+    event_link TEXT, -- Google Calendar event link
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT check_dates CHECK (check_out > check_in)
+);
+
+-- טבלה: quotes (הצעות מחיר) - אופציונלי
+CREATE TABLE IF NOT EXISTS quotes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cabin_id UUID REFERENCES cabins(id) ON DELETE CASCADE,
+    check_in DATE NOT NULL,
+    check_out DATE NOT NULL,
+    adults INT,
+    kids INT,
+    total_price DECIMAL(10,2),
+    quote_data JSONB, -- Full quote breakdown
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- טבלה: pricing_rules (כללי תמחור)

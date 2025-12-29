@@ -377,7 +377,12 @@
 </head>
 <body>
   <div class="container">
-    <h1>🏡 ZimmerBot - הזמנת מקום</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h1 style="margin: 0;">🏡 ZimmerBot - הזמנת מקום</h1>
+      <button id="adminBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+        🔧 Admin Panel
+      </button>
+    </div>
 
     <div class="card">
       <div class="row">
@@ -539,6 +544,8 @@
   <script>
     const CATALOG_URL = "/data/features_catalog.json";
     const API_BASE = "http://127.0.0.1:8000";
+    // Make API_BASE available globally for Admin Panel
+    window.API_BASE = API_BASE;
     const AVAILABILITY_URL = `${API_BASE}/availability`;
     const QUOTE_URL = `${API_BASE}/quote`;
     const BOOKING_URL = `${API_BASE}/book`;
@@ -799,6 +806,9 @@
       // הצג טבלת מחירים
       el("pricing_card").style.display = "block";
       
+      // הצג addons
+      renderAddons();
+      
       // טען quote (ללא scroll)
       await loadQuote(cabinId);
     }
@@ -834,11 +844,19 @@
           body: JSON.stringify(quoteRequest)
         });
         
-        const quote = await r.json();
-        
         if (!r.ok) {
-          throw new Error(quote.detail || "Failed to get quote");
+          const errorText = await r.text();
+          let errorDetail = "Failed to get quote";
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorDetail = errorJson.detail || errorJson.message || errorText;
+          } catch {
+            errorDetail = errorText || `HTTP ${r.status}`;
+          }
+          throw new Error(errorDetail);
         }
+        
+        const quote = await r.json();
         
         currentQuote = quote;
         displayPricingTable(quote);
@@ -985,7 +1003,7 @@
           checkbox.addEventListener('change', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            toggleAddon(addon.key, addon.price, addon.name);
+            toggleAddon(addon.key, addon.price, addon.name, e);
           });
           
           // Also prevent click propagation on the label
@@ -1000,10 +1018,12 @@
       });
     }
     
-    function toggleAddon(key, price, name) {
-      // Prevent default behavior and stop propagation
-      event.preventDefault();
-      event.stopPropagation();
+    function toggleAddon(key, price, name, event) {
+      // Prevent default behavior and stop propagation if event is provided
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       
       const checkbox = el(`addon_${key}`);
       if (!checkbox) {
@@ -1211,5 +1231,313 @@
       }
     })();
   </script>
+
+  <!-- Admin Panel Script -->
+  <script>
+    // Admin Panel Functions - use API_BASE from main script scope
+    const ADMIN_API_BASE = window.API_BASE || 'http://127.0.0.1:8000';
+    
+    function closeAdminModal() {
+      document.getElementById('adminModal').style.display = 'none';
+    }
+
+    function switchAdminTab(tab) {
+      document.querySelectorAll('.admin-tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.admin-tab').forEach(el => el.classList.remove('active'));
+
+      const tabContent = document.getElementById(`admin${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+      const tabButton = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+      
+      if (tabContent) tabContent.style.display = 'block';
+      if (tabButton) tabButton.classList.add('active');
+
+      if (tab === 'bookings') loadBookings();
+      else if (tab === 'audit') loadAuditLog();
+      else if (tab === 'stats') loadStats();
+    }
+
+    async function loadBookings() {
+      const status = document.getElementById('bookingStatusFilter')?.value || '';
+      // Try to get API_BASE from main script, fallback to default
+      const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+      const url = `${apiBase}/admin/bookings${status ? `?status=${status}` : ''}`;
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bookings = await response.json();
+        
+        const container = document.getElementById('bookingsList');
+        if (bookings.length === 0) {
+          container.innerHTML = '<p>No bookings found.</p>';
+          return;
+        }
+
+        let html = '<table class="admin-table"><thead><tr>';
+        html += '<th>ID</th><th>Cabin</th><th>Customer</th><th>Check-in</th><th>Check-out</th>';
+        html += '<th>Status</th><th>Price</th><th>Event ID</th><th>Created</th></tr></thead><tbody>';
+        
+        bookings.forEach(booking => {
+          const statusClass = `status-${booking.status || 'pending'}`;
+          html += `<tr>
+            <td>${(booking.booking_id || booking.id || '').substring(0, 8)}...</td>
+            <td>${booking.cabin_name || 'N/A'}</td>
+            <td>${booking.customer_name || 'N/A'}<br><small>${booking.customer_email || ''}</small></td>
+            <td>${booking.check_in || ''}</td>
+            <td>${booking.check_out || ''}</td>
+            <td><span class="status-badge ${statusClass}">${booking.status || 'pending'}</span></td>
+            <td>${booking.total_price || 0} ILS</td>
+            <td><small>${booking.event_id ? booking.event_id.substring(0, 20) + '...' : 'N/A'}</small></td>
+            <td><small>${booking.created_at ? new Date(booking.created_at).toLocaleString('he-IL') : ''}</small></td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (error) {
+        const container = document.getElementById('bookingsList');
+        if (container) {
+          container.innerHTML = `<p class="err">Error: ${error.message}</p>`;
+          console.error('Error loading bookings:', error);
+        }
+      }
+    }
+
+    async function loadAuditLog() {
+      const table = document.getElementById('auditTableFilter')?.value || '';
+      const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+      const url = `${apiBase}/admin/audit${table ? `?table_name=${table}` : ''}`;
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const logs = await response.json();
+        
+        const container = document.getElementById('auditList');
+        if (logs.length === 0) {
+          container.innerHTML = '<p>No audit logs found.</p>';
+          return;
+        }
+
+        let html = '<table class="admin-table"><thead><tr>';
+        html += '<th>ID</th><th>Table</th><th>Action</th><th>Record ID</th><th>New Values</th><th>Created</th></tr></thead><tbody>';
+        
+        logs.forEach(log => {
+          const newValues = log.new_values ? JSON.stringify(log.new_values, null, 2).substring(0, 100) : 'N/A';
+          html += `<tr>
+            <td>${(log.audit_id || log.id || '').substring(0, 8)}...</td>
+            <td>${log.table_name || ''}</td>
+            <td><strong>${log.action || ''}</strong></td>
+            <td><small>${(log.record_id || '').substring(0, 8)}...</small></td>
+            <td><pre style="font-size: 11px; max-width: 300px; overflow: auto;">${newValues}</pre></td>
+            <td><small>${log.created_at ? new Date(log.created_at).toLocaleString('he-IL') : ''}</small></td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (error) {
+        const container = document.getElementById('auditList');
+        if (container) {
+          container.innerHTML = `<p class="err">Error: ${error.message}</p>`;
+          console.error('Error loading audit log:', error);
+        }
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const [bookingsRes, auditRes] = await Promise.all([
+          fetch(`${apiBase}/admin/bookings`),
+          fetch(`${apiBase}/admin/audit`)
+        ]);
+        
+        if (!bookingsRes.ok) throw new Error(`HTTP ${bookingsRes.status}`);
+        if (!auditRes.ok) throw new Error(`HTTP ${auditRes.status}`);
+        
+        const bookingsData = await bookingsRes.json();
+        const auditData = await auditRes.json();
+        
+        // Ensure bookings and auditLogs are arrays
+        const bookings = Array.isArray(bookingsData) ? bookingsData : [];
+        const auditLogs = Array.isArray(auditData) ? auditData : [];
+        
+        const stats = {
+          totalBookings: bookings.length,
+          confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
+          holdBookings: bookings.filter(b => b.status === 'hold').length,
+          totalRevenue: bookings.reduce((sum, b) => sum + (parseFloat(b.total_price) || 0), 0),
+          totalAuditLogs: auditLogs.length,
+          availabilitySearches: auditLogs.filter(a => a.table_name === 'availability_search').length
+        };
+        
+        const html = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+            <div class="card">
+              <h3>Total Bookings</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #667eea;">${stats.totalBookings}</p>
+            </div>
+            <div class="card">
+              <h3>Confirmed</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #28a745;">${stats.confirmedBookings}</p>
+            </div>
+            <div class="card">
+              <h3>On Hold</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #ffc107;">${stats.holdBookings}</p>
+            </div>
+            <div class="card">
+              <h3>Total Revenue</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #28a745;">${stats.totalRevenue.toFixed(2)} ILS</p>
+            </div>
+            <div class="card">
+              <h3>Audit Logs</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #667eea;">${stats.totalAuditLogs}</p>
+            </div>
+            <div class="card">
+              <h3>Availability Searches</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #17a2b8;">${stats.availabilitySearches}</p>
+            </div>
+          </div>
+        `;
+        
+        const container = document.getElementById('statsContent');
+        if (container) container.innerHTML = html;
+      } catch (error) {
+        const container = document.getElementById('statsContent');
+        if (container) {
+          container.innerHTML = `<p class="err">Error: ${error.message}</p>`;
+          console.error('Error loading stats:', error);
+        }
+      }
+    }
+
+    // Initialize admin button
+    document.addEventListener('DOMContentLoaded', function() {
+      const adminBtn = document.getElementById('adminBtn');
+      if (adminBtn) {
+        adminBtn.addEventListener('click', () => {
+          const modal = document.getElementById('adminModal');
+          if (modal) {
+            modal.style.display = 'block';
+            loadBookings();
+          }
+        });
+      }
+
+      // Close modal when clicking outside
+      window.onclick = function(event) {
+        const modal = document.getElementById('adminModal');
+        if (event.target == modal) {
+          modal.style.display = 'none';
+        }
+      }
+    });
+  </script>
+
+  <!-- Admin Panel Modal -->
+  <div id="adminModal" class="modal">
+    <div class="modal-content" style="max-width: 1200px; width: 95%;">
+      <span class="close" onclick="closeAdminModal()">&times;</span>
+      <h2 style="margin-top: 0; color: #667eea;">Admin Panel - Database Content</h2>
+      
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+        <button id="tabBookings" class="admin-tab active" onclick="switchAdminTab('bookings')">Bookings</button>
+        <button id="tabAudit" class="admin-tab" onclick="switchAdminTab('audit')">Audit Log</button>
+        <button id="tabStats" class="admin-tab" onclick="switchAdminTab('stats')">Statistics</button>
+      </div>
+
+      <div id="adminContent">
+        <div id="adminBookings" class="admin-tab-content">
+          <h3>All Bookings</h3>
+          <div style="margin-bottom: 10px;">
+            <label>Filter by Status:</label>
+            <select id="bookingStatusFilter" onchange="loadBookings()">
+              <option value="">All</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="hold">Hold</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div id="bookingsList" style="max-height: 500px; overflow-y: auto;">
+            <p>Loading...</p>
+          </div>
+        </div>
+
+        <div id="adminAudit" class="admin-tab-content" style="display: none;">
+          <h3>Audit Log</h3>
+          <div style="margin-bottom: 10px;">
+            <label>Filter by Table:</label>
+            <select id="auditTableFilter" onchange="loadAuditLog()">
+              <option value="">All Tables</option>
+              <option value="bookings">Bookings</option>
+              <option value="availability_search">Availability Searches</option>
+            </select>
+          </div>
+          <div id="auditList" style="max-height: 500px; overflow-y: auto;">
+            <p>Loading...</p>
+          </div>
+        </div>
+
+        <div id="adminStats" class="admin-tab-content" style="display: none;">
+          <h3>Statistics</h3>
+          <div id="statsContent">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .admin-tab {
+      padding: 10px 20px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    .admin-tab.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .admin-tab-content {
+      margin-top: 20px;
+    }
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .admin-table th,
+    .admin-table td {
+      padding: 10px;
+      text-align: right;
+      border-bottom: 1px solid #ddd;
+    }
+    .admin-table th {
+      background: #f8f9fa;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+    }
+    .admin-table tr:hover {
+      background: #f8f9fa;
+    }
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status-confirmed { background: #d4edda; color: #155724; }
+    .status-hold { background: #fff3cd; color: #856404; }
+    .status-cancelled { background: #f8d7da; color: #721c24; }
+    .status-pending { background: #d1ecf1; color: #0c5460; }
+  </style>
+
 </body>
 </html>
