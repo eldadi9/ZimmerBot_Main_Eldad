@@ -36,7 +36,7 @@ CREDS_PATH = DATA_DIR / "credentials.json"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
 ]
 
 
@@ -109,32 +109,48 @@ def get_credentials():
     return creds
 
 
-
-
 def read_cabins_from_sheet(creds: Credentials) -> list[dict]:
     load_dotenv(BASE_DIR / ".env")
+
+    sheet_id = os.getenv("SHEET_ID")
     sheet_name = os.getenv("SHEET_NAME")
     worksheet_name = os.getenv("WORKSHEET_NAME", "Sheet1")
 
-    if not sheet_name:
-        raise ValueError("Missing SHEET_NAME in .env")
+    if not sheet_id and not sheet_name:
+        raise ValueError("Missing SHEET_ID or SHEET_NAME in .env")
 
     gc = gspread.authorize(creds)
-    sh = gc.open(sheet_name)
+
+    # Prefer SHEET_ID to avoid Drive search by title
+    if sheet_id:
+        sh = gc.open_by_key(sheet_id.strip())
+    else:
+        sh = gc.open(sheet_name.strip())
+
     ws = sh.worksheet(worksheet_name)
     return ws.get_all_records()
+
 
 
 def build_calendar_service(creds: Credentials):
     return build("calendar", "v3", credentials=creds)
 
 
-def list_calendar_events(
-    service,
-    calendar_id: str,
-    time_min_iso: str,
-    time_max_iso: str,
-) -> list[dict]:
+def list_calendar_events(creds_or_service, calendar_id: str, time_min_iso: str, time_max_iso: str) -> list[dict]:
+    """
+    Accepts either:
+    - google.oauth2.credentials.Credentials
+    - googleapiclient.discovery.Resource (calendar service)
+
+    This prevents mismatches like calling .events() on Credentials.
+    """
+    # If it's already a Calendar API service, it has .events()
+    if hasattr(creds_or_service, "events"):
+        service = creds_or_service
+    else:
+        # Assume it's Credentials
+        service = build("calendar", "v3", credentials=creds_or_service)
+
     result = (
         service.events()
         .list(
@@ -182,8 +198,11 @@ def create_calendar_event(
     created = service.events().insert(calendarId=calendar_id, body=body).execute()
     return created
 
+from datetime import datetime, timedelta, timezone
+
 
 def _to_rfc3339_z(dt: datetime) -> str:
+    # Ensure UTC RFC3339 with Z suffix
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     dt_utc = dt.astimezone(timezone.utc)
@@ -191,15 +210,21 @@ def _to_rfc3339_z(dt: datetime) -> str:
 
 
 def _parse_event_dt(value: str) -> datetime:
-    # dateTime: 2025-12-21T15:00:00+02:00
-    # date: 2025-12-21 (all day)
+    """
+    value can be:
+    - dateTime like '2025-12-21T15:00:00+02:00'
+    - date like '2025-12-21' (all-day)
+    Return timezone-aware datetime in UTC.
+    """
     if "T" in value:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+    # all-day date: treat start at 00:00 UTC of that date
+    dt = datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _event_interval_utc(e: dict) -> tuple[datetime, datetime]:
@@ -207,26 +232,39 @@ def _event_interval_utc(e: dict) -> tuple[datetime, datetime]:
     end_raw = e.get("end", {}).get("dateTime") or e.get("end", {}).get("date")
 
     if not start_raw or not end_raw:
+        # defensive fallback: zero interval
         now = datetime.now(timezone.utc)
         return now, now
 
-    return _parse_event_dt(start_raw), _parse_event_dt(end_raw)
+    start_dt = _parse_event_dt(start_raw)
+    end_dt = _parse_event_dt(end_raw)
+
+    # Google all-day end date is typically the next day (exclusive). Keep as is.
+    return start_dt, end_dt
 
 
 def _intervals_overlap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
+    # Overlap if intervals intersect: [a_start, a_end) with [b_start, b_end)
     return a_start < b_end and b_start < a_end
 
 
 def is_cabin_available(
-    service,
+    creds_or_service,
     calendar_id: str,
     desired_start_utc: datetime,
     desired_end_utc: datetime,
 ) -> tuple[bool, list[dict]]:
+    """
+    Returns:
+    - available: True/False
+    - conflicts: list of conflicting events (empty if available)
+
+    creds_or_service can be Credentials or Calendar service.
+    """
     time_min = _to_rfc3339_z(desired_start_utc)
     time_max = _to_rfc3339_z(desired_end_utc)
 
-    events = list_calendar_events(service, calendar_id, time_min, time_max)
+    events = list_calendar_events(creds_or_service, calendar_id, time_min, time_max)
 
     conflicts: list[dict] = []
     for e in events:
@@ -235,6 +273,7 @@ def is_cabin_available(
             conflicts.append(e)
 
     return (len(conflicts) == 0), conflicts
+
 
 
 def parse_datetime_local(value: str) -> datetime:
@@ -416,13 +455,20 @@ def find_available_cabins(
                 print(f"Cabin {cabin_id} filtered out: {reasons}")
             continue
 
-        ok, conflicts = is_cabin_available(service, cal_id, check_in_utc, check_out_utc)
-        if not ok:
+        # Check availability with error handling
+        try:
+            ok, conflicts = is_cabin_available(service, cal_id, check_in_utc, check_out_utc)
+            if not ok:
+                if verbose:
+                    examples = summarize_conflicts(conflicts, limit=3)
+                    print(f"Cabin {cabin_id} NOT available, conflicts={len(conflicts)}")
+                    for line in examples:
+                        print(f"  - {line}")
+                continue
+        except Exception as e:
+            # If calendar_id is invalid or calendar doesn't exist, skip this cabin
             if verbose:
-                examples = summarize_conflicts(conflicts, limit=3)
-                print(f"Cabin {cabin_id} NOT available, conflicts={len(conflicts)}")
-                for line in examples:
-                    print(f"  - {line}")
+                print(f"Cabin {cabin_id} calendar error (calendar_id: {cal_id[:50]}...): {e}")
             continue
 
         c2 = dict(c)
@@ -464,6 +510,25 @@ def main_cli():
 
     cabins = read_cabins_from_sheet(creds)
     print(f"Loaded cabins rows: {len(cabins)}")
+
+    print("DEBUG cabins keys and calendar ids:")
+    for idx, c in enumerate(cabins, start=1):
+        keys = list(c.keys())
+        cal1 = c.get("calendar_id")
+        cal2 = c.get("calendarId")
+        print(f"Row {idx} keys={keys}")
+        print(f"Row {idx} cabin_id={c.get('cabin_id')} calendar_id={cal1} calendarId={cal2}")
+
+
+    # Availability test: 2025-12-20 to 2025-12-31 (UTC)
+    check_in_utc = datetime(2025, 12, 23, 12, 0, 0, tzinfo=timezone.utc)
+    check_out_utc = datetime(2025, 12, 24, 10, 0, 0, tzinfo=timezone.utc)
+
+    available = find_available_cabins(creds, cabins, check_in_utc, check_out_utc)
+    print(f"Available cabins in range: {len(available)}")
+    for c in available:
+        print(f"- {c.get('cabin_id')} | {c.get('name')} | {c.get('area')}")
+
 
     if not cabins:
         print("No rows found in sheet.")
@@ -640,12 +705,42 @@ def get_credentials_api():
 
 
 
+from datetime import datetime, timezone
+
 def main():
-    """
-    נשאר כאן כדי לא לשבור הרצות ישנות.
-    """
-    main_cli()
+    print("ZimmerBot - availability test start")
+
+    creds = get_credentials()
+    print("OAuth OK")
+
+    cabins = read_cabins_from_sheet(creds)
+    print(f"Loaded cabins rows: {len(cabins)}")
+
+    if not cabins:
+        print("No rows found in sheet.")
+        return
+
+    # DEBUG (אפשר למחוק אחרי שמאשרים שהכל עובד)
+    for idx, c in enumerate(cabins, start=1):
+        print(f"Row {idx} cabin_id={c.get('cabin_id')} calendar_id={c.get('calendar_id')}")
+
+    # Test range (UTC)
+    check_in_utc = datetime(2025, 12, 20, 0, 0, 0, tzinfo=timezone.utc)
+    check_out_utc = datetime(2025, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+    available = find_available_cabins(creds, cabins, check_in_utc, check_out_utc)
+    print(f"Available cabins in range: {len(available)}")
+    for c in available:
+        print(f"- {c.get('cabin_id')} | {c.get('name')} | {c.get('area')}")
+
+    print("ZimmerBot - availability test done")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    # אם יש פרמטרים של CLI, נריץ main_cli, אחרת main טסט
+    if any(arg.startswith("--") for arg in sys.argv[1:]):
+        main_cli()
+    else:
+        main()

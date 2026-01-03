@@ -5,7 +5,7 @@ FastAPI-based REST API for cabin booking system
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -135,6 +135,7 @@ app.add_middleware(
 # /data מגיש קבצי JSON (כמו features_catalog.json)
 app.mount("/tools", StaticFiles(directory=str(TOOLS_DIR), html=True), name="tools")
 app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
+app.mount("/zimmers_pic", StaticFiles(directory=str(BASE_DIR / "zimmers_pic")), name="zimmers_pic")
 
 # היה אצלך mount כפול נוסף - משאיר כתיעוד ולא מפעיל
 # app.mount("/data", StaticFiles(directory=str(BASE_DIR / "data")), name="data")
@@ -197,6 +198,7 @@ class CabinInfo(BaseModel):
     base_price_night: Optional[float] = None
     weekend_price: Optional[float] = None
     calendar_id: Optional[str] = None
+    images_urls: Optional[List[str]] = None
 
 
 class AvailabilityResponse(BaseModel):
@@ -210,6 +212,7 @@ class AvailabilityResponse(BaseModel):
     max_adults: Optional[int] = None
     max_kids: Optional[int] = None
     features: Optional[str] = None
+    images_urls: Optional[List[str]] = None
 
 
 class BookingResponse(BaseModel):
@@ -220,13 +223,17 @@ class BookingResponse(BaseModel):
     message: str
 
 
+class AddonItem(BaseModel):
+    name: str = Field(..., description="Addon name")
+    price: float = Field(..., description="Addon price")
+
 class QuoteRequest(BaseModel):
     cabin_id: str = Field(..., description="Cabin ID to get quote for")
     check_in: str = Field(..., description="Check-in date/time (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
     check_out: str = Field(..., description="Check-out date/time (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
     adults: Optional[int] = Field(None, description="Number of adults")
     kids: Optional[int] = Field(None, description="Number of kids")
-    addons: Optional[list] = Field(None, description="List of addons (optional)")
+    addons: Optional[List[AddonItem]] = Field(None, description="List of addons (optional)")
 
 
 class QuoteResponse(BaseModel):
@@ -312,17 +319,34 @@ async def list_cabins():
         _, cabins = get_service()
         result = []
         for cabin in cabins:
+            # Convert features from dict to string if needed
+            features = cabin.get("features")
+            if isinstance(features, dict):
+                # If features is a dict (JSONB), check if it has 'raw' key
+                if 'raw' in features:
+                    features = features['raw']
+                else:
+                    # Otherwise, convert to comma-separated string from keys
+                    features_str = ",".join([k for k, v in features.items() if v])
+                    features = features_str if features_str else None
+            elif features and not isinstance(features, str):
+                features = str(features)
+            
+            # Use cabin_id_string if available (ZB01, ZB02, etc.) for easier booking
+            display_cabin_id = cabin.get("cabin_id_string") or cabin.get("cabin_id", "UNKNOWN")
+            
             result.append(
                 CabinInfo(
-                    cabin_id=cabin.get("cabin_id", "UNKNOWN"),
+                    cabin_id=display_cabin_id,  # Use cabin_id_string (ZB01) if available
                     name=cabin.get("name"),
                     area=cabin.get("area"),
                     max_adults=int(cabin.get("max_adults", 0)) if cabin.get("max_adults") else None,
                     max_kids=int(cabin.get("max_kids", 0)) if cabin.get("max_kids") else None,
-                    features=cabin.get("features"),
+                    features=features,
                     base_price_night=float(cabin.get("base_price_night", 0)) if cabin.get("base_price_night") else None,
                     weekend_price=float(cabin.get("weekend_price", 0)) if cabin.get("weekend_price") else None,
                     calendar_id=cabin.get("calendar_id") or cabin.get("calendarId"),
+                    images_urls=cabin.get("images_urls") or [],
                 )
             )
         return result
@@ -357,9 +381,84 @@ async def check_availability(request: AvailabilityRequest):
         result = []
         for cabin in candidates:
             pricing = compute_price_for_stay(cabin, check_in_local, check_out_local)
+            
+            # Convert features from dict to string if needed
+            features = cabin.get("features")
+            if isinstance(features, dict):
+                # If features is a dict (JSONB), check if it has 'raw' key
+                if 'raw' in features:
+                    features = features['raw']
+                else:
+                    # Otherwise, convert to comma-separated string from keys
+                    features_str = ",".join([k for k, v in features.items() if v])
+                    features = features_str if features_str else None
+            elif features and not isinstance(features, str):
+                features = str(features)
+            
+            # Use cabin_id_string if available (ZB01, ZB02, etc.) for easier booking
+            display_cabin_id = cabin.get("cabin_id_string") or cabin.get("cabin_id", "UNKNOWN")
+            
+            # Check for local images first, then use images_urls from DB
+            local_images = []
+            import os
+            from pathlib import Path
+            
+            # Get all possible search IDs - try to match by name or find cabin_id_string
+            search_ids = []
+            
+            # 1. Try cabin_id_string if available (ZB01, ZB02, etc.)
+            if cabin.get("cabin_id_string") and len(str(cabin.get("cabin_id_string"))) <= 20:
+                search_ids.append(str(cabin.get("cabin_id_string")))
+            
+            # 2. Try cabin_id if it's a short string (not UUID)
+            cabin_id_val = cabin.get("cabin_id", "")
+            if cabin_id_val and len(str(cabin_id_val)) <= 20 and "-" not in str(cabin_id_val):
+                search_ids.append(str(cabin_id_val))
+            
+            # 3. Try to find by matching name with directory names in zimmers_pic
+            # Map known cabin names to their IDs
+            if not search_ids:
+                cabin_name = cabin.get("name", "")
+                name_to_id_map = {
+                    "יולי": "ZB01",
+                    "אמי": "ZB02", 
+                    "מורן": "ZB03",
+                    "מורני": "ZB03"
+                }
+                for name_key, cabin_id_str in name_to_id_map.items():
+                    if name_key in cabin_name:
+                        search_ids.append(cabin_id_str)
+                        break
+            
+            # 4. If still no match, try all directories in zimmers_pic
+            if not search_ids:
+                pic_base_dir = BASE_DIR / "zimmers_pic"
+                if pic_base_dir.exists():
+                    # Just use the first directory as fallback (not ideal but works)
+                    for pic_dir in sorted(pic_base_dir.iterdir()):
+                        if pic_dir.is_dir() and (any(pic_dir.glob("*.jpg")) or any(pic_dir.glob("*.jpeg")) or any(pic_dir.glob("*.png"))):
+                            search_ids.append(pic_dir.name)
+                            break
+            
+            # Search for images in the found directories
+            for search_id in search_ids:
+                pic_dir = BASE_DIR / "zimmers_pic" / str(search_id)
+                if pic_dir.exists() and pic_dir.is_dir():
+                    for img_file in sorted(pic_dir.glob("*.jpg")):
+                        local_images.append(f"/zimmers_pic/{search_id}/{img_file.name}")
+                    for img_file in sorted(pic_dir.glob("*.jpeg")):
+                        local_images.append(f"/zimmers_pic/{search_id}/{img_file.name}")
+                    for img_file in sorted(pic_dir.glob("*.png")):
+                        local_images.append(f"/zimmers_pic/{search_id}/{img_file.name}")
+                    if local_images:
+                        break  # Found images, no need to check other IDs
+            
+            # Use local images if available, otherwise use images_urls from DB
+            final_images = local_images if local_images else (cabin.get("images_urls") or [])
+            
             result.append(
                 AvailabilityResponse(
-                    cabin_id=cabin.get("cabin_id", "UNKNOWN"),
+                    cabin_id=display_cabin_id,  # Use cabin_id_string (ZB01) if available
                     name=cabin.get("name"),
                     area=cabin.get("area"),
                     nights=pricing["nights"],
@@ -368,27 +467,33 @@ async def check_availability(request: AvailabilityRequest):
                     total_price=pricing["total"],
                     max_adults=int(cabin.get("max_adults", 0)) if cabin.get("max_adults") else None,
                     max_kids=int(cabin.get("max_kids", 0)) if cabin.get("max_kids") else None,
-                    features=cabin.get("features"),
+                    features=features,
+                    images_urls=final_images,
                 )
             )
 
         # Save audit log for availability search
-        import uuid
-        search_id = str(uuid.uuid4())
-        save_audit_log(
-            table_name="availability_search",
-            record_id=search_id,
-            action="SEARCH",
-            new_values={
-                "check_in": request.check_in,
-                "check_out": request.check_out,
-                "adults": request.adults,
-                "kids": request.kids,
-                "area": request.area,
-                "features": request.features,
-                "results_count": len(result)
-            }
-        )
+        try:
+            import uuid
+            search_id = str(uuid.uuid4())
+            save_audit_log(
+                table_name="availability_search",
+                record_id=search_id,
+                action="INSERT",  # Changed from "SEARCH" to "INSERT" to match schema constraint
+                new_values={
+                    "check_in": request.check_in,
+                    "check_out": request.check_out,
+                    "adults": request.adults,
+                    "kids": request.kids,
+                    "area": request.area,
+                    "features": request.features,
+                    "results_count": len(result),
+                    "search_type": "availability"  # Add search type to distinguish
+                }
+            )
+        except Exception as audit_error:
+            # Don't fail the request if audit log fails
+            print(f"Warning: Failed to save audit log: {audit_error}")
 
         return result
     except ValueError as e:
@@ -406,18 +511,45 @@ async def get_quote(request: QuoteRequest):
     try:
         _, cabins = get_service()
         
-        # מצא את הצימר
+        # מצא את הצימר - חיפוש לפי cabin_id_string (ZB01, ZB02), cabin_id (UUID), name, או calendar_id
         chosen = None
         request_cabin_id_normalized = normalize_text(request.cabin_id).lower()
         for cabin in cabins:
-            cabin_id_normalized = normalize_text(cabin.get("cabin_id")).lower()
+            # Try matching by cabin_id_string first (ZB01, ZB02, ZB03, etc.)
+            cabin_id_string = cabin.get("cabin_id_string")
+            if cabin_id_string:
+                cabin_id_string_normalized = normalize_text(str(cabin_id_string)).lower()
+                if cabin_id_string_normalized == request_cabin_id_normalized:
+                    chosen = cabin
+                    break
+            
+            # Try matching by cabin_id (UUID)
+            cabin_id_normalized = normalize_text(str(cabin.get("cabin_id", ""))).lower()
             if cabin_id_normalized == request_cabin_id_normalized:
                 chosen = cabin
                 break
+            
+            # Try matching by name
+            cabin_name_normalized = normalize_text(str(cabin.get("name", ""))).lower()
+            if cabin_name_normalized == request_cabin_id_normalized:
+                chosen = cabin
+                break
+            
+            # Try matching by calendar_id (last 8 chars)
+            calendar_id = cabin.get("calendar_id") or cabin.get("calendarId")
+            if calendar_id:
+                calendar_id_normalized = normalize_text(str(calendar_id)).lower()
+                if calendar_id_normalized == request_cabin_id_normalized or calendar_id_normalized.endswith(request_cabin_id_normalized):
+                    chosen = cabin
+                    break
         
         if not chosen:
             # Log available cabin_ids for debugging
-            available_ids = [normalize_text(c.get("cabin_id")) for c in cabins[:5]]  # First 5 for debugging
+            available_ids = []
+            for c in cabins[:5]:
+                cabin_id = c.get("cabin_id", "N/A")
+                name = c.get("name", "N/A")
+                available_ids.append(f"{cabin_id} ({name})")
             raise HTTPException(
                 status_code=404, 
                 detail=f"Cabin not found: {request.cabin_id}. Available IDs (sample): {available_ids}"
@@ -427,13 +559,18 @@ async def get_quote(request: QuoteRequest):
         check_in_local = parse_datetime_local(request.check_in)
         check_out_local = parse_datetime_local(request.check_out)
         
+        # המרת addons מ-AddonItem ל-Dict
+        addons_list = None
+        if request.addons:
+            addons_list = [{"name": addon.name, "price": addon.price} for addon in request.addons]
+        
         # חישוב מחיר מתקדם
         engine = PricingEngine()
         pricing = engine.calculate_price_breakdown(
             cabin=chosen,
             check_in=check_in_local,
             check_out=check_out_local,
-            addons=request.addons,
+            addons=addons_list,
             apply_discounts=True
         )
         
@@ -498,15 +635,46 @@ async def book_cabin(request: BookingRequest):
         check_in_utc = to_utc(check_in_local)
         check_out_utc = to_utc(check_out_local)
 
-        # Find cabin
+        # Find cabin - search by cabin_id_string (ZB01, ZB02), cabin_id (UUID), name, or calendar_id
         chosen = None
+        request_cabin_id_normalized = normalize_text(request.cabin_id).lower()
         for cabin in cabins:
-            if normalize_text(cabin.get("cabin_id")).lower() == normalize_text(request.cabin_id).lower():
+            # Try matching by cabin_id_string first (ZB01, ZB02, ZB03, etc.)
+            cabin_id_string = cabin.get("cabin_id_string")
+            if cabin_id_string:
+                cabin_id_string_normalized = normalize_text(str(cabin_id_string)).lower()
+                if cabin_id_string_normalized == request_cabin_id_normalized:
+                    chosen = cabin
+                    break
+            
+            # Try matching by cabin_id (UUID)
+            cabin_id_normalized = normalize_text(str(cabin.get("cabin_id", ""))).lower()
+            if cabin_id_normalized == request_cabin_id_normalized:
                 chosen = cabin
                 break
+            
+            # Try matching by name
+            cabin_name_normalized = normalize_text(str(cabin.get("name", ""))).lower()
+            if cabin_name_normalized == request_cabin_id_normalized:
+                chosen = cabin
+                break
+            
+            # Try matching by calendar_id (last 8 chars)
+            calendar_id = cabin.get("calendar_id") or cabin.get("calendarId")
+            if calendar_id:
+                calendar_id_normalized = normalize_text(str(calendar_id)).lower()
+                if calendar_id_normalized == request_cabin_id_normalized or calendar_id_normalized.endswith(request_cabin_id_normalized):
+                    chosen = cabin
+                    break
 
         if not chosen:
-            raise HTTPException(status_code=404, detail=f"Cabin not found: {request.cabin_id}")
+            # Log available cabin_ids for debugging
+            available_ids = []
+            for c in cabins[:5]:
+                cabin_id = c.get("cabin_id", "N/A")
+                name = c.get("name", "N/A")
+                available_ids.append(f"{cabin_id} ({name})")
+            raise HTTPException(status_code=404, detail=f"Cabin not found: {request.cabin_id}. Available: {available_ids}")
 
         cal_id = chosen.get("calendar_id") or chosen.get("calendarId")
         if not cal_id:
@@ -579,6 +747,20 @@ async def book_cabin(request: BookingRequest):
         event_id = created.get("id")
         event_link = created.get("htmlLink")
 
+        # Calculate total_price if not provided
+        total_price = request.total_price
+        if total_price is None or total_price == 0:
+            # Calculate price using compute_price_for_stay
+            from src.main import compute_price_for_stay
+            pricing = compute_price_for_stay(chosen, check_in_local, check_out_local)
+            total_price = pricing.get("total", 0.0)
+            # If addons are provided, add them to the total
+            if request.addons:
+                from src.pricing import PricingEngine
+                engine = PricingEngine()
+                addons_total = sum(addon.get("price", 0) for addon in request.addons if isinstance(addon, dict))
+                total_price += addons_total
+
         # Save booking to DB (with event_id and event_link)
         booking_id = save_booking_to_db(
             cabin_id=chosen.get("cabin_id"),
@@ -587,7 +769,7 @@ async def book_cabin(request: BookingRequest):
             check_out=check_out_local.date().isoformat(),
             adults=request.adults,
             kids=request.kids,
-            total_price=request.total_price,
+            total_price=total_price,
             status="confirmed",
             event_id=event_id,
             event_link=event_link,
@@ -597,7 +779,7 @@ async def book_cabin(request: BookingRequest):
         if booking_id:
             transaction_id = save_transaction(
                 booking_id=booking_id,
-                amount=request.total_price or 0.0,
+                amount=total_price or 0.0,
                 status="pending",
                 payment_method=None
             )
@@ -615,7 +797,7 @@ async def book_cabin(request: BookingRequest):
                     "check_out": check_out_local.date().isoformat(),
                     "adults": request.adults,
                     "kids": request.kids,
-                    "total_price": request.total_price,
+                    "total_price": total_price,
                     "status": "confirmed",
                     "event_id": event_id,
                     "event_link": event_link
@@ -659,6 +841,7 @@ async def get_all_bookings(
             with get_db_connection() as conn:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 
+                # Check if updated_at column exists, if not use created_at
                 query = """
                     SELECT 
                         b.id::text as booking_id,
@@ -677,7 +860,7 @@ async def get_all_bookings(
                         b.event_id,
                         b.event_link,
                         b.created_at,
-                        b.updated_at
+                        b.created_at as updated_at
                     FROM bookings b
                     LEFT JOIN cabins c ON b.cabin_id = c.id
                     LEFT JOIN customers cust ON b.customer_id = cust.id
@@ -792,6 +975,7 @@ async def get_audit_logs(
 ):
     """
     Get audit logs (admin endpoint)
+    Supports both old schema (entity_type, entity_id, payload) and new schema (table_name, record_id, old_values, new_values)
     """
     try:
         from src.db import get_db_connection
@@ -802,43 +986,98 @@ async def get_audit_logs(
             with get_db_connection() as conn:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 
-                query = """
-                    SELECT 
-                        id::text as audit_id,
-                        table_name,
-                        record_id::text as record_id,
-                        action,
-                        old_values,
-                        new_values,
-                        user_id::text as user_id,
-                        created_at
-                    FROM audit_log
-                """
+                # First, check which schema the table uses
+                cursor.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'audit_log' 
+                    AND column_name IN ('table_name', 'entity_type')
+                """)
+                columns = [row['column_name'] for row in cursor.fetchall()]
                 
-                conditions = []
-                params = []
-                
-                if table_name:
-                    conditions.append("table_name = %s")
-                    params.append(table_name)
-                
-                if action:
-                    conditions.append("action = %s")
-                    params.append(action)
-                
-                if conditions:
-                    query += " WHERE " + " AND ".join(conditions)
-                
-                query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
-                params.extend([limit, offset])
-                
-                cursor.execute(query, params)
-                rows = cursor.fetchall()
-                
-                return [dict(row) for row in rows]
+                if 'table_name' in columns:
+                    # New schema with table_name, record_id, old_values, new_values
+                    query = """
+                        SELECT 
+                            id::text as audit_id,
+                            COALESCE(table_name, 'N/A') as table_name,
+                            record_id::text as record_id,
+                            action,
+                            old_values,
+                            new_values,
+                            user_id::text as user_id,
+                            created_at
+                        FROM audit_log
+                    """
+                    
+                    conditions = []
+                    params = []
+                    
+                    if table_name:
+                        conditions.append("table_name = %s")
+                        params.append(table_name)
+                    
+                    if action:
+                        conditions.append("action = %s")
+                        params.append(action)
+                    
+                    if conditions:
+                        query += " WHERE " + " AND ".join(conditions)
+                    
+                    query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+                    params.extend([limit, offset])
+                    
+                    cursor.execute(query, params)
+                    rows = cursor.fetchall()
+                    
+                    return [dict(row) for row in rows]
+                elif 'entity_type' in columns:
+                    # Old schema with entity_type, entity_id, payload
+                    query = """
+                        SELECT 
+                            id::text as audit_id,
+                            COALESCE(entity_type, 'N/A') as table_name,
+                            entity_id::text as record_id,
+                            action,
+                            payload->'old_values' as old_values,
+                            payload->'new_values' as new_values,
+                            payload->>'user_id' as user_id,
+                            created_at
+                        FROM audit_log
+                    """
+                    
+                    conditions = []
+                    params = []
+                    
+                    if table_name:
+                        conditions.append("entity_type = %s")
+                        params.append(table_name)
+                    
+                    if action:
+                        conditions.append("action = %s")
+                        params.append(action)
+                    
+                    if conditions:
+                        query += " WHERE " + " AND ".join(conditions)
+                    
+                    query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+                    params.extend([limit, offset])
+                    
+                    cursor.execute(query, params)
+                    rows = cursor.fetchall()
+                    
+                    return [dict(row) for row in rows]
+                else:
+                    # Unknown schema - return empty
+                    return []
+                    
         except psycopg2.OperationalError as db_error:
             # Database not available - return empty list
             print(f"Warning: Database not available for /admin/audit: {db_error}")
+            return []
+        except psycopg2.ProgrammingError as schema_error:
+            # Schema error - return empty list
+            print(f"Warning: Schema error in /admin/audit: {schema_error}")
             return []
             
     except Exception as e:

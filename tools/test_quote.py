@@ -14,8 +14,8 @@ def test_quote():
     
     data = {
         "cabin_id": "cabin-1",
-        "check_in": "2026-02-14 15:00",
-        "check_out": "2026-02-16 11:00",
+        "check_in": "2026-03-14 15:00",
+        "check_out": "2026-03-16 11:00",
         "adults": 2,
         "kids": 0,
         "addons": [

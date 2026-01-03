@@ -158,6 +158,50 @@
       display: inline-block;
     }
     
+    /* Cabin images */
+    .cabin-images {
+      display: flex;
+      gap: 8px;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+    .cabin-image {
+      width: 120px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid #ddd;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .cabin-image:hover {
+      transform: scale(1.05);
+      border-color: #2196F3;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .cabin-image-main {
+      width: 100%;
+      max-width: 400px;
+      height: 250px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 3px solid #2196F3;
+      margin: 12px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .cabin-image-placeholder {
+      width: 120px;
+      height: 90px;
+      background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 12px;
+      border: 2px dashed #999;
+    }
+    
     .btn-primary { 
       background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); 
       color: white; 
@@ -513,6 +557,13 @@
         <span class="close">&times;</span>
         <h2>יצירת הזמנה</h2>
         
+        <!-- תמונה גדולה של הצימר -->
+        <div id="booking_cabin_image" style="margin: 12px 0; text-align: center; display: none;">
+          <img id="booking_cabin_image_src" src="" alt="צימר" class="cabin-image-main" 
+               style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" 
+               onerror="this.style.display='none'" />
+        </div>
+        
         <div style="margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
           <strong>JSON Request:</strong>
           <pre id="modal_json_preview" style="background: #111; color: #eee; padding: 10px; border-radius: 4px; margin-top: 8px; font-size: 12px; overflow-x: auto;"></pre>
@@ -769,8 +820,60 @@
       let html = `<div style='margin-bottom: 12px;'><strong>נמצאו ${cabins.length} צימרים זמינים:</strong></div>`;
       
       cabins.forEach((cabin, index) => {
+        // Get images from cabin data or fetch from API
+        const images = cabin.images_urls || [];
+        const cabinId = cabin.cabin_id || '';
+        
+        // Try to find cabin_id_string (ZB01, ZB02, etc.) from cabin name
+        let searchId = cabinId;
+        if (cabinId && cabinId.includes('-')) {
+          // It's a UUID, try to find by name
+          const cabinName = cabin.name || '';
+          if (cabinName.includes('יולי')) {
+            searchId = 'ZB01';
+          } else if (cabinName.includes('אמי')) {
+            searchId = 'ZB02';
+          } else if (cabinName.includes('מורן') || cabinName.includes('מורני')) {
+            searchId = 'ZB03';
+          }
+        }
+        
+        // Build image HTML
+        let imagesHtml = '';
+        if (images && images.length > 0) {
+          imagesHtml = '<div class="cabin-images">';
+          images.forEach((img, imgIndex) => {
+            // Handle both local paths and full URLs
+            let imgSrc = img;
+            if (img.startsWith('/zimmers_pic/')) {
+              // Local path - use as is
+              imgSrc = img;
+            } else if (img.startsWith('http://') || img.startsWith('https://')) {
+              // Full URL - use as is
+              imgSrc = img;
+            } else if (searchId && !searchId.includes('-')) {
+              // Assume it's a filename in zimmers_pic folder (only if searchId is not UUID)
+              imgSrc = `/zimmers_pic/${searchId}/${img}`;
+            }
+            
+            imagesHtml += `<img src="${imgSrc}" alt="${cabin.name || cabinId}" class="cabin-image" onerror="this.style.display='none'" />`;
+          });
+          imagesHtml += '</div>';
+        } else {
+          // Try to load default image if exists (only if searchId is not UUID)
+          if (searchId && !searchId.includes('-')) {
+            imagesHtml = `<div class="cabin-images">
+              <img src="/zimmers_pic/${searchId}/hero-cabin.jpg" alt="${cabin.name || cabinId}" class="cabin-image" 
+                   onerror="if(this.parentElement) this.parentElement.innerHTML='<div class=&quot;cabin-image-placeholder&quot;>אין תמונה</div>'" />
+            </div>`;
+          } else {
+            imagesHtml = '<div class="cabin-image-placeholder">אין תמונה</div>';
+          }
+        }
+        
         html += `
           <div class="cabin-item" data-cabin-id="${cabin.cabin_id}" onclick="selectCabin('${cabin.cabin_id}')">
+            ${imagesHtml}
             <div class="cabin-name">${cabin.name || cabin.cabin_id}</div>
             <div class="cabin-details">
               ${cabin.area ? `📍 ${cabin.area} | ` : ''}
@@ -896,11 +999,37 @@
       const discountPercent = discount ? safeGet(discount, 'percent', 0) : 0;
       const total = safeGet(quote, 'total', safeGet(quote, 'total_price', 0)); // Support both 'total' and 'total_price'
       
+      // Get cabin images if available
+      const cabinId = quote.cabin_id || '';
+      // Try to find cabin_id_string (ZB01, ZB02, etc.) from cabin name
+      let searchId = cabinId;
+      if (cabinId && cabinId.includes('-')) {
+        // It's a UUID, try to find by name
+        const cabinName = quote.cabin_name || '';
+        if (cabinName.includes('יולי')) {
+          searchId = 'ZB01';
+        } else if (cabinName.includes('אמי')) {
+          searchId = 'ZB02';
+        } else if (cabinName.includes('מורן') || cabinName.includes('מורני')) {
+          searchId = 'ZB03';
+        }
+      }
+      
+      let imagesHtml = '';
+      if (searchId && !searchId.includes('-')) {
+        // Try to load default image (only if searchId is not UUID)
+        imagesHtml = `<div style="margin: 12px 0; text-align: center;">
+          <img src="/zimmers_pic/${searchId}/hero-cabin.jpg" alt="${quote.cabin_name || cabinId}" class="cabin-image-main" 
+               onerror="this.style.display='none'" />
+        </div>`;
+      }
+      
       let html = `
         <div style="margin-bottom: 12px; padding: 8px; background: #f5f5f5; border-radius: 6px;">
           <strong>${quote.cabin_name || quote.cabin_id || 'N/A'}</strong><br/>
           <small>${quote.check_in || ''} → ${quote.check_out || ''}</small>
         </div>
+        ${imagesHtml}
         <table class="pricing-table">
           <tr>
             <td class="label">מספר לילות:</td>
@@ -1076,6 +1205,53 @@
       el("modal_notes").value = "";
       el("booking_result").innerHTML = "";
       
+      // הצג תמונה של הצימר אם יש quote או cabin info
+      const imageContainer = el("booking_cabin_image");
+      const imageSrc = el("booking_cabin_image_src");
+      if (currentQuote && currentQuote.cabin_name) {
+        // נסה למצוא את cabin_id_string לפי שם
+        let searchId = cabinId;
+        if (cabinId && cabinId.includes('-')) {
+          const cabinName = currentQuote.cabin_name || '';
+          if (cabinName.includes('יולי')) {
+            searchId = 'ZB01';
+          } else if (cabinName.includes('אמי')) {
+            searchId = 'ZB02';
+          } else if (cabinName.includes('מורן') || cabinName.includes('מורני')) {
+            searchId = 'ZB03';
+          }
+        }
+        if (searchId && !searchId.includes('-')) {
+          imageSrc.src = `/zimmers_pic/${searchId}/hero-cabin.jpg`;
+          imageContainer.style.display = 'block';
+        } else {
+          imageContainer.style.display = 'none';
+        }
+      } else {
+        // נסה למצוא לפי cabinId
+        let searchId = cabinId;
+        if (cabinId && cabinId.includes('-')) {
+          // זה UUID, נסה למצוא לפי cabin_id_string
+          const cabin = availableCabins.find(c => c.cabin_id === cabinId);
+          if (cabin && cabin.name) {
+            const cabinName = cabin.name;
+            if (cabinName.includes('יולי')) {
+              searchId = 'ZB01';
+            } else if (cabinName.includes('אמי')) {
+              searchId = 'ZB02';
+            } else if (cabinName.includes('מורן') || cabinName.includes('מורני')) {
+              searchId = 'ZB03';
+            }
+          }
+        }
+        if (searchId && !searchId.includes('-')) {
+          imageSrc.src = `/zimmers_pic/${searchId}/hero-cabin.jpg`;
+          imageContainer.style.display = 'block';
+        } else {
+          imageContainer.style.display = 'none';
+        }
+      }
+      
       // עדכן את ה-JSON preview
       updateBookingJson();
       
@@ -1083,13 +1259,17 @@
     }
     
     function updateBookingJson() {
+      // Get total price from current quote if available
+      const totalPrice = currentQuote ? (currentQuote.total || currentQuote.total_price || null) : null;
+      
       const bookingJson = {
         cabin_id: el("modal_cabin_id").value,
         customer: el("modal_customer").value || null,
         phone: el("modal_phone").value.trim() || null,
         notes: el("modal_notes").value.trim() || null,
         check_in: formatDateTimeForAPI(el("check_in").value),
-        check_out: formatDateTimeForAPI(el("check_out").value)
+        check_out: formatDateTimeForAPI(el("check_out").value),
+        total_price: totalPrice
       };
       
       // הוסף addons אם יש
@@ -1119,13 +1299,19 @@
         return;
       }
       
+      // Get total price from current quote if available
+      const totalPrice = currentQuote ? (currentQuote.total || currentQuote.total_price || null) : null;
+      
       const bookingData = {
         cabin_id: cabinId,
         customer: customer,
         phone: phone || null,
         notes: notes || null,
         check_in: checkIn,
-        check_out: checkOut
+        check_out: checkOut,
+        adults: parseInt(el("adults").value) || null,
+        kids: parseInt(el("kids").value) || null,
+        total_price: totalPrice
       };
       
       // הוסף addons אם יש
@@ -1367,7 +1553,10 @@
           totalBookings: bookings.length,
           confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
           holdBookings: bookings.filter(b => b.status === 'hold').length,
-          totalRevenue: bookings.reduce((sum, b) => sum + (parseFloat(b.total_price) || 0), 0),
+          totalRevenue: bookings.reduce((sum, b) => {
+            const price = parseFloat(b.total_price);
+            return sum + (isNaN(price) || !price ? 0 : price);
+          }, 0),
           totalAuditLogs: auditLogs.length,
           availabilitySearches: auditLogs.filter(a => a.table_name === 'availability_search').length
         };
@@ -1465,7 +1654,15 @@
         </div>
 
         <div id="adminAudit" class="admin-tab-content" style="display: none;">
-          <h3>Audit Log</h3>
+          <h3>Audit Log (יומן פעילות)</h3>
+          <p style="color: #666; margin-bottom: 12px; font-size: 14px; background: #f0f0f0; padding: 12px; border-radius: 6px;">
+            <strong>מה זה Audit Log?</strong><br/>
+            יומן פעילות שמתעד את כל הפעולות במערכת:<br/>
+            • <strong>חיפושי זמינות</strong> (Availability Searches) - כל פעם שמחפשים צימרים<br/>
+            • <strong>יצירת הזמנות</strong> (Bookings) - כל הזמנה שנוצרת<br/>
+            • <strong>עדכונים ומחיקות</strong> - שינויים בנתונים<br/>
+            זה עוזר לעקוב אחר פעילות המשתמשים ולאתר בעיות.
+          </p>
           <div style="margin-bottom: 10px;">
             <label>Filter by Table:</label>
             <select id="auditTableFilter" onchange="loadAuditLog()">

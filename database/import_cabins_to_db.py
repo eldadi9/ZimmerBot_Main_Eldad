@@ -65,6 +65,31 @@ def import_cabins():
             errors = 0
             
             print("\n3. Importing cabins...")
+            # Check if cabin_id_string column exists, add it if missing
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'cabins' AND column_name = 'cabin_id_string'
+            """)
+            has_cabin_id_string = cursor.fetchone() is not None
+            
+            if not has_cabin_id_string:
+                print("   Adding missing 'cabin_id_string' column to cabins table...")
+                try:
+                    cursor.execute("""
+                        ALTER TABLE cabins 
+                        ADD COLUMN cabin_id_string VARCHAR(20)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_cabins_cabin_id_string 
+                        ON cabins(cabin_id_string)
+                    """)
+                    conn.commit()
+                    print("   ✓ Column 'cabin_id_string' added successfully")
+                except Exception as e:
+                    print(f"   Warning: Could not add 'cabin_id_string' column: {e}")
+                    conn.rollback()
+            
             for cabin in cabins:
                 try:
                     cabin_id_raw = cabin.get("cabin_id") or cabin.get("id")
@@ -105,49 +130,115 @@ def import_cabins():
                     elif not isinstance(images_urls, list):
                         images_urls = []
                     
-                    # Check if cabin exists (by cabin_id string in a separate field, or by UUID)
-                    # First, let's check if we need to add a cabin_id_string field or use name/calendar_id
-                    # For now, we'll check by calendar_id if available, otherwise by name
+                    # Check if cabin exists (by UUID first, then by calendar_id, then by name)
+                    # First check if UUID already exists
+                    cursor.execute("""
+                        SELECT id FROM cabins WHERE id = %s::uuid
+                    """, (cabin_id,))
+                    exists_by_uuid = cursor.fetchone()
+                    
+                    # Then check by calendar_id if available
+                    exists_by_calendar = None
                     if calendar_id:
                         cursor.execute("""
                             SELECT id FROM cabins WHERE calendar_id = %s
                         """, (calendar_id,))
-                    else:
-                        cursor.execute("""
-                            SELECT id FROM cabins WHERE name = %s
-                        """, (name,))
+                        exists_by_calendar = cursor.fetchone()
                     
-                    exists = cursor.fetchone()
+                    # Finally check by name
+                    cursor.execute("""
+                        SELECT id FROM cabins WHERE name = %s
+                    """, (name,))
+                    exists_by_name = cursor.fetchone()
                     
-                    if exists:
-                        existing_id = exists[0]
+                    # Determine which ID to use
+                    existing_id = None
+                    if exists_by_uuid:
+                        existing_id = exists_by_uuid[0]
+                    elif exists_by_calendar:
+                        existing_id = exists_by_calendar[0]
+                    elif exists_by_name:
+                        existing_id = exists_by_name[0]
+                    
+                    if existing_id:
+                        # Use existing ID (might be different from generated UUID)
+                        cabin_id = str(existing_id)
+                    
+                    # Handle images - check for local images in zimmers_pic folder
+                    import os
+                    from pathlib import Path
+                    local_images = []
+                    if cabin_id_raw and isinstance(cabin_id_raw, str) and len(cabin_id_raw) <= 20:
+                        # Check if local images exist
+                        pic_dir = BASE_DIR / "zimmers_pic" / cabin_id_raw
+                        if pic_dir.exists() and pic_dir.is_dir():
+                            for img_file in pic_dir.glob("*.jpg"):
+                                local_images.append(f"/zimmers_pic/{cabin_id_raw}/{img_file.name}")
+                            for img_file in pic_dir.glob("*.jpeg"):
+                                local_images.append(f"/zimmers_pic/{cabin_id_raw}/{img_file.name}")
+                            for img_file in pic_dir.glob("*.png"):
+                                local_images.append(f"/zimmers_pic/{cabin_id_raw}/{img_file.name}")
+                    
+                    # Use local images if available, otherwise use images_urls from Sheets
+                    final_images = local_images if local_images else images_urls
+                    
+                    if existing_id:
                         # Update existing cabin (has_updated_at was checked at start)
                         if has_updated_at:
-                            cursor.execute("""
-                                UPDATE cabins SET
-                                    name = %s,
-                                    area = %s,
-                                    max_adults = %s,
-                                    max_kids = %s,
-                                    features = %s::jsonb,
-                                    base_price_night = %s,
-                                    weekend_price = %s,
-                                    images_urls = %s,
-                                    calendar_id = %s,
-                                    updated_at = CURRENT_TIMESTAMP
-                                WHERE id = %s
-                            """, (
-                                name,
-                                area,
-                                max_adults,
-                                max_kids,
-                                json.dumps(features) if features else None,
-                                base_price_night,
-                                weekend_price,
-                                images_urls,
-                                calendar_id,
-                                existing_id,
-                            ))
+                            if has_cabin_id_string:
+                                cursor.execute("""
+                                    UPDATE cabins SET
+                                        name = %s,
+                                        area = %s,
+                                        max_adults = %s,
+                                        max_kids = %s,
+                                        features = %s::jsonb,
+                                        base_price_night = %s,
+                                        weekend_price = %s,
+                                        images_urls = %s,
+                                        calendar_id = %s,
+                                        cabin_id_string = %s,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE id = %s
+                                """, (
+                                    name,
+                                    area,
+                                    max_adults,
+                                    max_kids,
+                                    json.dumps(features) if features else None,
+                                    base_price_night,
+                                    weekend_price,
+                                    final_images,
+                                    calendar_id,
+                                    cabin_id_raw if isinstance(cabin_id_raw, str) and len(cabin_id_raw) <= 20 else None,
+                                    existing_id,
+                                ))
+                            else:
+                                cursor.execute("""
+                                    UPDATE cabins SET
+                                        name = %s,
+                                        area = %s,
+                                        max_adults = %s,
+                                        max_kids = %s,
+                                        features = %s::jsonb,
+                                        base_price_night = %s,
+                                        weekend_price = %s,
+                                        images_urls = %s,
+                                        calendar_id = %s,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE id = %s
+                                """, (
+                                    name,
+                                    area,
+                                    max_adults,
+                                    max_kids,
+                                    json.dumps(features) if features else None,
+                                    base_price_night,
+                                    weekend_price,
+                                    final_images,
+                                    calendar_id,
+                                    existing_id,
+                                ))
                         else:
                             # Update without updated_at column
                             cursor.execute("""

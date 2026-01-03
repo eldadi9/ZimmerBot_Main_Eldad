@@ -50,21 +50,48 @@ def read_cabins_from_db() -> List[Dict[str, Any]]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
+            # Check if cabin_id_string column exists
             cursor.execute("""
-                SELECT 
-                    id::text as cabin_id,
-                    name,
-                    area,
-                    max_adults,
-                    max_kids,
-                    features,
-                    base_price_night,
-                    weekend_price,
-                    images_urls,
-                    calendar_id
-                FROM cabins
-                ORDER BY name
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'cabins' AND column_name = 'cabin_id_string'
             """)
+            has_cabin_id_string = cursor.fetchone() is not None
+            
+            if has_cabin_id_string:
+                cursor.execute("""
+                    SELECT 
+                        id::text as cabin_id,
+                        name,
+                        area,
+                        max_adults,
+                        max_kids,
+                        features,
+                        base_price_night,
+                        weekend_price,
+                        images_urls,
+                        calendar_id,
+                        COALESCE(cabin_id_string, id::text) as cabin_id_string
+                    FROM cabins
+                    ORDER BY name
+                """)
+            else:
+                cursor.execute("""
+                    SELECT 
+                        id::text as cabin_id,
+                        name,
+                        area,
+                        max_adults,
+                        max_kids,
+                        features,
+                        base_price_night,
+                        weekend_price,
+                        images_urls,
+                        calendar_id,
+                        id::text as cabin_id_string
+                    FROM cabins
+                    ORDER BY name
+                """)
             
             # Note: cabin_id from DB is now a UUID string
             # If you need the original cabin_id from Sheets, you might want to add a cabin_id_string field
@@ -76,8 +103,33 @@ def read_cabins_from_db() -> List[Dict[str, Any]]:
                 cabin = dict(row)
                 # Ensure compatibility with existing code
                 if cabin.get("features") and isinstance(cabin["features"], dict):
-                    # Convert JSONB dict to string if needed
+                    # If features is a dict with 'raw' key, extract it
+                    if 'raw' in cabin["features"]:
+                        cabin["features"] = cabin["features"]["raw"]
+                    # Otherwise keep as dict (will be converted later in API)
+                
+                # Convert images_urls from PostgreSQL array to Python list
+                if cabin.get("images_urls"):
+                    if isinstance(cabin["images_urls"], str):
+                        # If it's a string, try to parse as JSON or split by comma
+                        import json
+                        try:
+                            cabin["images_urls"] = json.loads(cabin["images_urls"])
+                        except:
+                            # If not JSON, split by comma
+                            cabin["images_urls"] = [img.strip() for img in cabin["images_urls"].split(",") if img.strip()]
+                    elif not isinstance(cabin["images_urls"], list):
+                        # If it's not a list, convert to list
+                        cabin["images_urls"] = [cabin["images_urls"]] if cabin["images_urls"] else []
+                else:
+                    cabin["images_urls"] = []
+                
+                # Use cabin_id_string if available for easier booking (ZB01, ZB02, etc.)
+                if cabin.get("cabin_id_string") and cabin["cabin_id_string"] != cabin.get("cabin_id"):
+                    # Keep both - cabin_id (UUID) and cabin_id_string (ZB01, etc.)
+                    # The API will use cabin_id_string for display and booking
                     pass
+                
                 cabins.append(cabin)
             
             return cabins
@@ -291,6 +343,8 @@ def save_audit_log(
     Save audit log entry
     Returns audit_log_id (UUID as string)
     
+    Supports both old schema (entity_type, entity_id, payload) and new schema (table_name, record_id, old_values, new_values)
+    
     Note: record_id can be any string. If it's not a UUID, we'll generate a UUID
     and store the original record_id in new_values.
     """
@@ -301,48 +355,92 @@ def save_audit_log(
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Convert record_id to UUID if needed
-            try:
-                record_uuid = str(uuid_lib.UUID(record_id))
-            except (ValueError, AttributeError):
-                # Not a UUID, generate a new UUID for the audit log
-                # The original record_id will be stored in new_values
-                record_uuid = str(uuid_lib.uuid4())
-                # Add original record_id to new_values if not already there
-                if new_values:
-                    new_values = dict(new_values)
-                    new_values["original_record_id"] = record_id
-                else:
-                    new_values = {"original_record_id": record_id}
-            
-            # Convert user_id to UUID if provided
-            user_uuid = None
-            if user_id:
-                try:
-                    user_uuid = str(uuid_lib.UUID(user_id))
-                except (ValueError, AttributeError):
-                    user_uuid = None
-            
+            # Check which schema the table uses
             cursor.execute("""
-                INSERT INTO audit_log (
-                    table_name, record_id, action, old_values, new_values, user_id
-                )
-                VALUES (
-                    %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s::uuid
-                )
-                RETURNING id::text
-            """, (
-                table_name,
-                record_uuid,
-                action,
-                json.dumps(old_values) if old_values else None,
-                json.dumps(new_values) if new_values else None,
-                user_uuid
-            ))
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'audit_log' 
+                AND column_name IN ('table_name', 'entity_type')
+            """)
+            columns = [row[0] for row in cursor.fetchall()]
             
-            audit_id = cursor.fetchone()[0]
-            conn.commit()
-            return audit_id
+            if 'table_name' in columns:
+                # New schema with table_name, record_id, old_values, new_values
+                # Convert record_id to UUID if needed
+                try:
+                    record_uuid = str(uuid_lib.UUID(record_id))
+                except (ValueError, AttributeError):
+                    # Not a UUID, generate a new UUID for the audit log
+                    # The original record_id will be stored in new_values
+                    record_uuid = str(uuid_lib.uuid4())
+                    # Add original record_id to new_values if not already there
+                    if new_values:
+                        new_values = dict(new_values)
+                        new_values["original_record_id"] = record_id
+                    else:
+                        new_values = {"original_record_id": record_id}
+                
+                # Convert user_id to UUID if provided
+                user_uuid = None
+                if user_id:
+                    try:
+                        user_uuid = str(uuid_lib.UUID(user_id))
+                    except (ValueError, AttributeError):
+                        user_uuid = None
+                
+                cursor.execute("""
+                    INSERT INTO audit_log (
+                        table_name, record_id, action, old_values, new_values, user_id
+                    )
+                    VALUES (
+                        %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s::uuid
+                    )
+                    RETURNING id::text
+                """, (
+                    table_name,
+                    record_uuid,
+                    action,
+                    json.dumps(old_values) if old_values else None,
+                    json.dumps(new_values) if new_values else None,
+                    user_uuid
+                ))
+                
+                audit_id = cursor.fetchone()[0]
+                conn.commit()
+                return audit_id
+            elif 'entity_type' in columns:
+                # Old schema with entity_type, entity_id, payload
+                # Build payload JSON
+                payload = {}
+                if old_values:
+                    payload["old_values"] = old_values
+                if new_values:
+                    payload["new_values"] = new_values
+                if user_id:
+                    payload["user_id"] = user_id
+                
+                cursor.execute("""
+                    INSERT INTO audit_log (
+                        entity_type, entity_id, action, payload
+                    )
+                    VALUES (
+                        %s, %s, %s, %s::jsonb
+                    )
+                    RETURNING id::text
+                """, (
+                    table_name,
+                    record_id,
+                    action,
+                    json.dumps(payload) if payload else None
+                ))
+                
+                audit_id = cursor.fetchone()[0]
+                conn.commit()
+                return audit_id
+            else:
+                # Unknown schema - skip
+                print("Warning: Unknown audit_log schema, skipping save")
+                return None
             
     except Exception as e:
         print(f"Error saving audit log: {e}")
