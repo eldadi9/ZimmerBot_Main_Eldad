@@ -141,17 +141,44 @@
 | 📨 **הודעות אוטומטיות** | תזכורות והודעות ממוכנות ללקוחות ולבעלים |
 | 🚨 **התראות חכמות** | התראות בזמן אמת על שינויים וחריגות |
 
-### 🔑 עיקרון מפתח
+### 🔑 עיקרון מפתח - ארכיטקטורת MVC + AI Agent
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  הממשקים (צ'אט, טלפון) = שכבה דקה              │
+│  VIEW (Loveable/React) = שכבה דקה              │
+│  רק UI - אין Logic, רק תצוגה ותקשורת          │
 │                                                 │
-│  כל השכל + החוקים + הנתונים = Backend + DB    │
+│  CONTROLLER (FastAPI) = לוגיקה עסקית           │
+│  AI Agent + Services + Business Rules          │
+│                                                 │
+│  MODEL (Database) = שכבת נתונים                │
+│  כל הנתונים, כל החוקים, כל ההיסטוריה          │
 └─────────────────────────────────────────────────┘
 ```
 
 **הכל מרוכז בשרת ובמסד הנתונים - הממשקים רק מציגים ומעבירים מידע.**
+
+### 🎯 מה הכלי נועד לעשות?
+
+**ZimmerBot = סוכן AI חכם מלא מקצה לקצה**
+
+הכלי נועד להיות **סוכן AI חכם** שמלווה את הלקוח בכל שלבי המסע:
+
+1. **לפני ההזמנה** - חיפוש, שאלות, השוואות, המלצות
+2. **תהליך ההזמנה** - הנחיה צעד אחר צעד, תמחור, תשלום
+3. **לפני הגעה** - תזכורות, הוראות, פרטי כניסה
+4. **במהלך שהות** - תוספות, שאלות, בעיות, מידע על האזור
+5. **אחרי עזיבה** - משוב, תודה, הנחות ללקוחות חוזרים
+6. **לקוח חוזר** - זיהוי, הנחות, המלצות מותאמות
+
+**הכלי מודולרי** - ניתן להטמיע בכל פלטפורמה:
+- אתר אינטרנט (WordPress, Wix, Shopify)
+- Facebook Messenger
+- Instagram
+- WhatsApp
+- טלפון (IVR)
+
+**הכלי חכם** - מזהה כוונות, מנהל הקשר, נותן תגובות מותאמות, ומלווה את הלקוח בכל שלב.
 
 ---
 
@@ -510,7 +537,672 @@ Webhook מספק הסליקה ← אימות תשלום
 
 ## 🎛️ Controller
 
-## 🏗️ ארכיטקטורה טכנית
+## 🏗️ ארכיטקטורה טכנית - MVC + AI Agent חכם
+
+### 📐 סקירת הארכיטקטורה הנוכחית
+
+**מבנה נוכחי (לפני הפרדת MVC מלאה):**
+
+```
+ZimmerBot_Main_Eldad/
+├── src/
+│   ├── api_server.py      # FastAPI - Controller + Routes (מעורב)
+│   ├── main.py            # Calendar/Sheets Logic
+│   ├── db.py              # Database - Model Layer (חלקי)
+│   ├── pricing.py         # Pricing Logic
+│   ├── hold.py           # Hold Manager
+│   ├── payment.py        # Payment Manager
+│   └── email_service.py  # Email Service
+├── tools/
+│   └── features_picker.html  # Frontend (VIEW) - לא מופרד, מעורב עם Logic
+├── database/
+│   └── schema.sql        # Database Schema
+└── docs/
+```
+
+**בעיות במבנה הנוכחי:**
+- ❌ אין הפרדה ברורה בין Model, View, Controller
+- ❌ ה-View (HTML) מעורב עם Business Logic
+- ❌ אין שכבת AI Agent נפרדת
+- ❌ לא מודולרי - קשה להטמיע באתרים אחרים
+- ❌ קשה לתחזק ולהרחיב
+
+---
+
+### 🎯 מבנה MVC מומלץ - ארכיטקטורה עתידית
+
+**מבנה מוצע (לאחר הפרדת MVC):**
+
+```
+ZimmerBot/
+├── backend/                    # Backend API (FastAPI)
+│   ├── models/                # MODEL - Data Layer
+│   │   ├── cabin.py           # Cabin Model (Pydantic/SQLAlchemy)
+│   │   ├── booking.py         # Booking Model
+│   │   ├── customer.py        # Customer Model
+│   │   ├── transaction.py     # Transaction Model
+│   │   └── pricing_rule.py    # Pricing Rule Model
+│   │
+│   ├── controllers/           # CONTROLLER - Business Logic
+│   │   ├── booking_controller.py      # לוגיקה של הזמנות
+│   │   ├── availability_controller.py # לוגיקה של זמינות
+│   │   ├── pricing_controller.py      # לוגיקה של תמחור
+│   │   ├── payment_controller.py      # לוגיקה של תשלומים
+│   │   ├── hold_controller.py         # לוגיקה של Holds
+│   │   └── chat_controller.py          # לוגיקה של צ'אט (AI)
+│   │
+│   ├── services/             # Services Layer (Business Services)
+│   │   ├── calendar_service.py        # שירות יומן
+│   │   ├── email_service.py           # שירות אימייל
+│   │   ├── payment_service.py         # שירות תשלומים
+│   │   └── notification_service.py    # שירות התראות
+│   │
+│   ├── ai_agent/              # 🧠 AI Agent Layer (חדש!)
+│   │   ├── agent_core.py              # Core AI Agent - הלב של הסוכן
+│   │   ├── intent_classifier.py       # זיהוי כוונות - מה הלקוח רוצה?
+│   │   ├── context_manager.py         # ניהול הקשר - זיכרון השיחה
+│   │   ├── response_generator.py      # יצירת תגובות - תשובות חכמות
+│   │   ├── knowledge_base.py          # בסיס ידע - מידע על צימרים, אזורים
+│   │   └── conversation_flow.py       # זרימת שיחה - State Machine
+│   │
+│   ├── api/                   # API Routes (FastAPI Endpoints)
+│   │   ├── routes/
+│   │   │   ├── booking_routes.py      # /book, /bookings
+│   │   │   ├── availability_routes.py  # /availability
+│   │   │   ├── pricing_routes.py       # /quote
+│   │   │   ├── chat_routes.py          # /chat (AI Chat API)
+│   │   │   └── admin_routes.py        # /admin/*
+│   │   └── main.py            # FastAPI App (Entry Point)
+│   │
+│   └── database/              # Database Layer
+│       ├── connection.py      # חיבור ל-DB
+│       ├── repositories/      # Repository Pattern
+│       │   ├── cabin_repository.py     # CRUD לצימרים
+│       │   ├── booking_repository.py  # CRUD להזמנות
+│       │   └── customer_repository.py  # CRUD ללקוחות
+│       └── migrations/        # Database Migrations
+│
+├── frontend/                  # VIEW - Loveable/React/Vue
+│   ├── web/                   # Web Widget (Loveable)
+│   │   ├── components/
+│   │   │   ├── ChatWidget.tsx         # ווידג'ט צ'אט
+│   │   │   ├── BookingForm.tsx        # טופס הזמנה
+│   │   │   ├── AvailabilityCalendar.tsx # לוח שנה זמינות
+│   │   │   └── PaymentModal.tsx        # מודל תשלום
+│   │   ├── hooks/
+│   │   │   ├── useChat.ts             # Hook לצ'אט
+│   │   │   ├── useBooking.ts          # Hook להזמנות
+│   │   │   └── useAvailability.ts     # Hook לזמינות
+│   │   └── index.ts           # Entry point
+│   │
+│   ├── facebook/             # Facebook Messenger Bot
+│   │   └── messenger_bot.ts
+│   │
+│   ├── instagram/            # Instagram Bot
+│   │   └── instagram_bot.ts
+│   │
+│   └── whatsapp/             # WhatsApp Business API
+│       └── whatsapp_bot.ts
+│
+├── shared/                    # Shared Code
+│   ├── types/                 # TypeScript Types
+│   ├── constants/            # Constants
+│   └── utils/                # Utilities
+│
+└── plugins/                   # 🎯 Addon/Plugin System
+    ├── wordpress/
+    │   └── zimmerbot-plugin.php
+    ├── shopify/
+    │   └── zimmerbot-app/
+    └── wix/
+        └── zimmerbot-widget/
+```
+
+---
+
+### 🎨 שילוב עם Loveable (VIEW Layer)
+
+**Loveable = VIEW Layer בלבד - רק UI, אין Logic**
+
+```
+┌─────────────────────────────────────────────────┐
+│              VIEW (Loveable)                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │  Web     │  │ Facebook │  │ Instagram│      │
+│  │  Widget  │  │ Messenger│  │   Bot    │      │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘      │
+└───────┼─────────────┼─────────────┼────────────┘
+        │             │             │
+        └─────────────┴─────────────┘
+                      │
+        ┌─────────────▼─────────────┐
+        │   API Gateway (FastAPI)   │
+        │      CONTROLLER Layer      │
+        │  ┌──────────────────────┐ │
+        │  │  AI Agent Core       │ │
+        │  │  Business Logic      │ │
+        │  │  Services            │ │
+        │  └──────────────────────┘ │
+        └─────────────┬─────────────┘
+                      │
+        ┌─────────────▼─────────────┐
+        │   Database (PostgreSQL)   │
+        │      MODEL Layer           │
+        │  ┌──────────────────────┐ │
+        │  │  Repositories        │ │
+        │  │  Data Models         │ │
+        │  └──────────────────────┘ │
+        └───────────────────────────┘
+```
+
+**זרימת נתונים:**
+
+1. **VIEW (Loveable)** - משתמש כותב הודעה
+2. **API Gateway** - `POST /api/chat` עם ההודעה
+3. **CONTROLLER** - `ChatController.handle_message()`
+4. **AI Agent** - עיבוד ההודעה, זיהוי כוונה, יצירת תגובה
+5. **Services** - קריאה לשירותים (Availability, Pricing, etc.)
+6. **MODEL** - קריאה ל-Repositories
+7. **Database** - שאילתות SQL
+8. **Response Chain** - חזרה דרך כל השכבות ל-VIEW
+
+**דוגמת קוד - VIEW (Loveable):**
+
+```typescript
+// VIEW (Loveable) - רק UI, אין Logic
+// frontend/web/components/ChatWidget.tsx
+
+import { useChat } from '../hooks/useChat';
+
+export function ChatWidget() {
+  const { messages, sendMessage, isLoading } = useChat();
+  
+  return (
+    <div className="chat-widget">
+      {messages.map(msg => (
+        <Message key={msg.id} message={msg} />
+      ))}
+      <Input 
+        onSend={sendMessage} 
+        disabled={isLoading}
+      />
+    </div>
+  );
+}
+
+// Hook - תקשורת עם API
+// frontend/web/hooks/useChat.ts
+
+export function useChat() {
+  const [messages, setMessages] = useState([]);
+  
+  const sendMessage = async (text: string) => {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text })
+    });
+    const data = await response.json();
+    setMessages(prev => [...prev, data]);
+  };
+  
+  return { messages, sendMessage, isLoading };
+}
+```
+
+**דוגמת קוד - CONTROLLER (FastAPI):**
+
+```python
+# CONTROLLER (FastAPI) - Business Logic
+# backend/api/routes/chat_routes.py
+
+from backend.ai_agent.agent_core import AIAgent
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    # AI Agent מטפל בהודעה
+    agent = AIAgent()
+    response = await agent.process_message(
+        message=request.message,
+        session_id=request.session_id,
+        context=request.context
+    )
+    
+    return ChatResponse(
+        message=response.text,
+        intent=response.intent,
+        actions=response.actions
+    )
+```
+
+---
+
+### 🧠 סוכן AI חכם - ארכיטקטורה מפורטת
+
+**הסוכן החכם מטפל בכל השלבים:**
+
+#### 1. לפני ההזמנה
+- חיפוש צימרים לפי תאריכים, תכונות, תקציב
+- שאלות על צימרים ספציפיים
+- השוואה בין צימרים
+- המלצות מותאמות אישית
+- תמחור מפורט
+
+#### 2. תהליך ההזמנה
+- הנחיה צעד אחר צעד
+- איסוף פרטים (שם, טלפון, אימייל)
+- בחירת תוספות
+- תמחור סופי
+- הנחיה בתשלום
+
+#### 3. לפני הגעה
+- תזכורות (יומיים לפני)
+- הוראות הגעה
+- פרטי כניסה
+- קישורי Waze/Google Maps
+- מידע על האזור
+
+#### 4. במהלך שהות
+- הזמנת תוספות (ארוחת בוקר, עיסוי, etc.)
+- שאלות על הצימר
+- דיווח על בעיות
+- מידע על אטרקציות באזור
+- בקשות שירות
+
+#### 5. אחרי עזיבה
+- הודעת תודה
+- בקשה לביקורת
+- קופון להזמנה הבאה
+- המלצות על צימרים אחרים
+
+#### 6. לקוח חוזר
+- זיהוי אוטומטי
+- הנחות מיוחדות
+- המלצות מותאמות
+- היסטוריית הזמנות
+
+**מבנה הסוכן החכם:**
+
+```python
+# backend/ai_agent/agent_core.py
+
+class AIAgent:
+    """
+    סוכן AI חכם שמטפל בכל השלבים
+    """
+    
+    def __init__(self):
+        self.intent_classifier = IntentClassifier()      # זיהוי כוונות
+        self.context_manager = ContextManager()          # ניהול הקשר
+        self.response_generator = ResponseGenerator()    # יצירת תגובות
+        self.knowledge_base = KnowledgeBase()            # בסיס ידע
+        self.conversation_flow = ConversationFlow()      # זרימת שיחה
+    
+    async def process_message(
+        self, 
+        message: str, 
+        session_id: str,
+        context: Optional[Dict] = None
+    ) -> AgentResponse:
+        """
+        עיבוד הודעה - זיהוי כוונה, הקשר, ותגובה
+        """
+        # 1. זיהוי כוונה
+        intent = await self.intent_classifier.classify(message)
+        
+        # 2. ניהול הקשר
+        context = await self.context_manager.update(
+            session_id=session_id,
+            intent=intent,
+            message=message,
+            previous_context=context
+        )
+        
+        # 3. קבלת מידע מבסיס הידע
+        knowledge = await self.knowledge_base.get_relevant_info(
+            intent=intent,
+            context=context
+        )
+        
+        # 4. יצירת תגובה
+        response = await self.response_generator.generate(
+            intent=intent,
+            context=context,
+            knowledge=knowledge,
+            message=message
+        )
+        
+        # 5. זרימת שיחה (state machine)
+        next_actions = await self.conversation_flow.get_next_actions(
+            current_state=context.state,
+            intent=intent
+        )
+        
+        return AgentResponse(
+            text=response.text,
+            intent=intent,
+            actions=next_actions,
+            context=context,
+            metadata=response.metadata
+        )
+```
+
+**זרימת שיחה - State Machine:**
+
+```python
+# backend/ai_agent/conversation_flow.py
+
+STATES = {
+    'GREETING': 'ברכה ראשונית',
+    'SEARCHING': 'חיפוש צימר',
+    'VIEWING_OPTIONS': 'צפייה באופציות',
+    'BOOKING': 'תהליך הזמנה',
+    'PAYMENT': 'תשלום',
+    'CONFIRMED': 'הזמנה מאושרת',
+    'PRE_ARRIVAL': 'לפני הגעה',
+    'DURING_STAY': 'במהלך שהות',
+    'POST_STAY': 'אחרי עזיבה',
+    'RETURNING_CUSTOMER': 'לקוח חוזר'
+}
+
+TRANSITIONS = {
+    'GREETING': ['SEARCHING', 'VIEWING_OPTIONS'],
+    'SEARCHING': ['VIEWING_OPTIONS', 'BOOKING'],
+    'VIEWING_OPTIONS': ['BOOKING', 'SEARCHING'],
+    'BOOKING': ['PAYMENT', 'CONFIRMED'],
+    'PAYMENT': ['CONFIRMED'],
+    'CONFIRMED': ['PRE_ARRIVAL'],
+    'PRE_ARRIVAL': ['DURING_STAY'],
+    'DURING_STAY': ['POST_STAY'],
+    'POST_STAY': ['RETURNING_CUSTOMER'],
+    'RETURNING_CUSTOMER': ['SEARCHING', 'BOOKING']
+}
+```
+
+**זיהוי כוונות (Intent Classification):**
+
+```python
+# backend/ai_agent/intent_classifier.py
+
+class IntentClassifier:
+    """
+    זיהוי כוונות - מה הלקוח רוצה?
+    """
+    
+    INTENTS = {
+        # לפני הזמנה
+        'SEARCH_AVAILABILITY': 'חיפוש זמינות',
+        'ASK_ABOUT_CABIN': 'שאלה על צימר',
+        'COMPARE_CABINS': 'השוואה בין צימרים',
+        'GET_PRICING': 'בקשת מחיר',
+        'ASK_FEATURES': 'שאלה על תכונות',
+        
+        # תהליך הזמנה
+        'START_BOOKING': 'התחלת הזמנה',
+        'PROVIDE_DETAILS': 'מסירת פרטים',
+        'ASK_BOOKING_STATUS': 'בדיקת סטטוס הזמנה',
+        
+        # במהלך שהות
+        'REQUEST_SERVICE': 'בקשת שירות',
+        'REPORT_ISSUE': 'דיווח על בעיה',
+        'ASK_LOCAL_INFO': 'שאלה על האזור',
+        'ORDER_ADDON': 'הזמנת תוספת',
+        
+        # אחרי עזיבה
+        'LEAVE_REVIEW': 'השארת ביקורת',
+        'ASK_RECOMMENDATION': 'בקשת המלצה',
+        
+        # כללי
+        'GREETING': 'ברכה',
+        'GOODBYE': 'פרידה',
+        'THANK_YOU': 'תודה',
+        'HELP': 'בקשת עזרה'
+    }
+    
+    async def classify(self, message: str) -> str:
+        """
+        זיהוי כוונה מהודעה
+        """
+        # שימוש ב-LLM (OpenAI/Anthropic) או ML Model
+        # או rule-based + embeddings
+        ...
+```
+
+---
+
+### 🎯 מודולריות - Addon לכל פלטפורמה
+
+**הכלי מודולרי - ניתן להטמיע בכל פלטפורמה:**
+
+#### 1. Web Widget (Loveable)
+```html
+<div id="zimmerbot-widget"></div>
+<script src="https://cdn.zimmerbot.com/widget.js"></script>
+<script>
+  ZimmerBot.init({
+    containerId: 'zimmerbot-widget',
+    apiUrl: 'https://api.zimmerbot.com'
+  });
+</script>
+```
+
+#### 2. WordPress Plugin
+```php
+// WordPress Plugin - פשוט להטמעה
+[zimmerbot_chat]
+```
+
+#### 3. Facebook Messenger
+```typescript
+// Facebook Messenger Bot
+// Webhook handler אוטומטי
+```
+
+#### 4. Instagram Bot
+```typescript
+// Instagram Bot
+// Webhook handler אוטומטי
+```
+
+#### 5. WhatsApp Business
+```typescript
+// WhatsApp Business API
+// Webhook handler אוטומטי
+```
+
+**ארכיטקטורת Plugin:**
+
+```typescript
+// shared/types/plugin.ts
+
+export interface ZimmerBotPlugin {
+  platform: 'web' | 'facebook' | 'instagram' | 'whatsapp' | 'wordpress' | 'shopify';
+  init(config: PluginConfig): Promise<void>;
+  handleMessage(message: IncomingMessage): Promise<OutgoingMessage>;
+  getUIComponents?(): React.ComponentType[];
+  handleWebhook?(payload: any): Promise<any>;
+}
+```
+
+---
+
+### 📊 תכנית יישום - שלבים מפורטים
+
+#### שלב 1: הפרדת MVC (2-3 ימים) ⏳ **בתהליך**
+
+**מה נעשה עד כה:**
+- ✅ יש Backend API (FastAPI)
+- ✅ יש Database Layer (db.py)
+- ✅ יש Services (email_service, payment, etc.)
+- ⏳ אין הפרדה ברורה ל-Models/Controllers
+- ⏳ ה-View מעורב עם Logic
+
+**מה צריך לעשות:**
+1. יצירת מבנה תיקיות חדש:
+   ```
+   backend/
+   ├── models/
+   ├── controllers/
+   ├── services/
+   └── api/
+   ```
+
+2. העברת קוד קיים:
+   - `src/db.py` → `backend/models/` + `backend/database/repositories/`
+   - `src/api_server.py` → `backend/controllers/` + `backend/api/routes/`
+   - `src/pricing.py` → `backend/controllers/pricing_controller.py`
+   - `src/hold.py` → `backend/controllers/hold_controller.py`
+   - `src/payment.py` → `backend/services/payment_service.py`
+   - `src/email_service.py` → `backend/services/email_service.py`
+
+3. הפרדת View:
+   - `tools/features_picker.html` → `frontend/web/components/` (React)
+
+4. יצירת API Gateway:
+   - `backend/api/main.py` - FastAPI App מרכזי
+
+**Definition of Done:**
+- [ ] כל הקוד מאורגן ב-Models, Controllers, Views
+- [ ] אין Logic ב-View
+- [ ] API Gateway עובד
+- [ ] בדיקות עוברות
+
+---
+
+#### שלב 2: AI Agent Core (5-7 ימים) ❌ **לא התחיל**
+
+**מה צריך לעשות:**
+1. יצירת `AIAgent` class:
+   - `backend/ai_agent/agent_core.py`
+
+2. יצירת `IntentClassifier`:
+   - `backend/ai_agent/intent_classifier.py`
+   - זיהוי כוונות: SEARCH_AVAILABILITY, ASK_ABOUT_CABIN, START_BOOKING, etc.
+
+3. יצירת `ContextManager`:
+   - `backend/ai_agent/context_manager.py`
+   - ניהול הקשר השיחה, State Machine
+
+4. יצירת `ResponseGenerator`:
+   - `backend/ai_agent/response_generator.py`
+   - יצירת תגובות חכמות לפי Intent ו-Context
+
+5. יצירת `KnowledgeBase`:
+   - `backend/ai_agent/knowledge_base.py`
+   - בסיס ידע על צימרים, אזורים, תכונות
+
+6. יצירת `ConversationFlow`:
+   - `backend/ai_agent/conversation_flow.py`
+   - State Machine לזרימת שיחה
+
+7. יצירת Chat API:
+   - `backend/api/routes/chat_routes.py`
+   - `POST /api/chat` endpoint
+
+**Definition of Done:**
+- [ ] AI Agent מזהה כוונות
+- [ ] ניהול הקשר עובד
+- [ ] תגובות חכמות
+- [ ] זרימת שיחה עובדת
+- [ ] Chat API עובד
+
+---
+
+#### שלב 3: View Layer (Loveable) (3-5 ימים) ❌ **לא התחיל**
+
+**מה צריך לעשות:**
+1. יצירת React Components ב-Loveable:
+   - `frontend/web/components/ChatWidget.tsx`
+   - `frontend/web/components/BookingForm.tsx`
+   - `frontend/web/components/AvailabilityCalendar.tsx`
+   - `frontend/web/components/PaymentModal.tsx`
+
+2. יצירת Hooks:
+   - `frontend/web/hooks/useChat.ts`
+   - `frontend/web/hooks/useBooking.ts`
+   - `frontend/web/hooks/useAvailability.ts`
+
+3. אינטגרציה עם Backend API:
+   - חיבור ל-`/api/chat`
+   - חיבור ל-`/api/availability`
+   - חיבור ל-`/api/book`
+
+4. UI/UX מעולה:
+   - עיצוב מודרני
+   - RTL support
+   - Responsive
+
+**Definition of Done:**
+- [ ] React Components ב-Loveable
+- [ ] Chat Widget עובד
+- [ ] אינטגרציה עם Backend
+- [ ] UI/UX מעולה
+
+---
+
+#### שלב 4: Plugin System (4-6 ימים) ❌ **לא התחיל**
+
+**מה צריך לעשות:**
+1. יצירת Plugin Interface:
+   - `shared/types/plugin.ts`
+
+2. יצירת Web Plugin:
+   - `plugins/web/index.ts`
+
+3. יצירת Facebook Plugin:
+   - `plugins/facebook/messenger_bot.ts`
+
+4. יצירת WordPress Plugin:
+   - `plugins/wordpress/zimmerbot-plugin.php`
+
+5. יצירת Shopify App:
+   - `plugins/shopify/zimmerbot-app/`
+
+**Definition of Done:**
+- [ ] Web Plugin עובד
+- [ ] Facebook Plugin עובד
+- [ ] WordPress Plugin עובד
+- [ ] תיעוד מלא
+
+---
+
+### 🔄 זרימת עבודה מלאה - דוגמה
+
+**לקוח מחפש צימר:**
+
+```
+1. VIEW (Loveable)
+   └─> משתמש כותב: "אני מחפש צימר לסופ"ש"
+   
+2. API Gateway (FastAPI)
+   └─> POST /api/chat
+       {
+         "message": "אני מחפש צימר לסופ"ש",
+         "session_id": "abc123"
+       }
+   
+3. CONTROLLER
+   └─> ChatController.handle_message()
+   
+4. AI Agent
+   ├─> IntentClassifier: "SEARCH_AVAILABILITY"
+   ├─> ContextManager: State = "SEARCHING"
+   ├─> KnowledgeBase: קבלת צימרים זמינים
+   └─> ResponseGenerator: "מצאתי 3 צימרים זמינים..."
+   
+5. Services
+   └─> AvailabilityService.check_availability()
+   
+6. Models
+   └─> CabinRepository.get_available_cabins()
+   
+7. Database
+   └─> SELECT * FROM cabins WHERE ...
+   
+8. Response Chain (הפוך)
+   └─> VIEW מציג: "מצאתי 3 צימרים זמינים..."
+```
+
+---
 
 ### סקירת שכבות המערכת
 
@@ -1120,159 +1812,120 @@ class HoldManager {
 
 #### Definition of Done
 
-- [ ] Hold נוצר ב-Redis
-- [ ] Hold נוצר ביומן
-- [ ] Hold מתפוגג אוטומטית אחרי 15 דקות
-- [ ] Hold ניתן לשחרור ידני
-- [ ] המרה ל-booking עובדת
-- [ ] לא ניתן ליצור Hold כפול
+- [x] Hold נוצר ב-Redis
+- [x] Hold נוצר ביומן
+- [x] Hold מתפוגג אוטומטית אחרי 15 דקות
+- [x] Hold ניתן לשחרור ידני
+- [x] המרה ל-booking עובדת
+- [x] לא ניתן ליצור Hold כפול
 
 ---
 
-### 💳 שלב 5: תשלום + אימות Webhooks
+### 💳 שלב 5: תשלום + אימות Webhooks - **100% הושלם**
 
 **⏱️ זמן משוער:** 5-6 ימים  
 **🎯 מטרה:** אינטגרציה מלאה עם ספק סליקה
 
-#### משימות
+#### מה הושלם:
 
-**1. יצירת חיוב**
+- ✅ `PaymentManager` class - ניהול תשלומים עם Stripe
+- ✅ `create_payment_intent` - יצירת Payment Intent
+- ✅ `/book` endpoint - תמיכה ב-`create_payment: true`
+- ✅ `POST /webhooks/stripe` - Webhook handler מלא
+- ✅ אימות Webhook signature
+- ✅ טיפול ב-`payment_intent.succeeded`
+- ✅ טיפול ב-`payment_intent.payment_failed`
+- ✅ עדכון Transaction status ב-DB
+- ✅ שליחת Payment Receipt email אוטומטית
+- ✅ בדיקות אוטומטיות (`database/test_stage5_payments.py`)
+- ✅ UI מלא ב-`features_picker.html` - Payment Modal עם Mock mode
 
-```javascript
-async function createPaymentIntent(booking, holdData) {
-    const paymentIntent = await stripe.paymentIntents.create({
-        amount: booking.total_price * 100, // באגורות
-        currency: 'ils',
-        metadata: {
-            booking_id: booking.id,
-            cabin_id: holdData.cabin_id,
-            customer_id: holdData.customer_id
-        },
-        description: `הזמנה: ${holdData.cabin_id} | ${holdData.check_in}`
-    });
-    
-    return {
-        client_secret: paymentIntent.client_secret,
-        payment_id: paymentIntent.id
-    };
-}
+**קבצים:**
+- `src/payment.py` - PaymentManager class
+- `src/api_server.py` - `/book` endpoint עם payment intent, `/webhooks/stripe`
+- `tools/features_picker.html` - Payment Modal עם Mock/Real Stripe
+- `database/test_stage5_payments.py` - בדיקות אוטומטיות
+
+**Endpoints:**
+- `POST /book` - יצירת הזמנה עם `create_payment: true` (יוצר Payment Intent)
+- `POST /webhooks/stripe` - Webhook handler ל-Stripe events
+
+**תכונות:**
+- 💳 יצירת Payment Intent עם metadata מלא
+- 🔐 אימות Webhook signature
+- ✅ עדכון Transaction status אוטומטי
+- 📧 שליחת Payment Receipt email אוטומטית
+- 🧪 Mock Payment Modal לבדיקות (ללא Stripe)
+
+**איך לבדוק:**
+```bash
+database\run_test_stage5.bat
 ```
 
-**2. Webhook Handler**
-
-```javascript
-app.post('/webhooks/stripe', async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-    
-    try {
-        event = stripe.webhooks.constructEvent(
-            req.body,
-            sig,
-            process.env.STRIPE_WEBHOOK_SECRET
-        );
-    } catch (err) {
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-    
-    if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object;
-        
-        // המר Hold להזמנה מאושרת
-        await convertHoldToBooking(
-            paymentIntent.metadata.booking_id,
-            paymentIntent.id
-        );
-        
-        // שלח הודעת אישור
-        await sendConfirmationEmail(
-            paymentIntent.metadata.customer_id
-        );
-    }
-    
-    res.json({ received: true });
-});
-```
-
-#### Definition of Done
-
-- [ ] יצירת חיוב עובדת
-- [ ] קישור תשלום נשלח ללקוח
-- [ ] Webhook מקבל אירועים
-- [ ] תשלום מאומת מעדכן DB
-- [ ] Hold מומר אוטומטית להזמנה
-- [ ] החזר כספי עובד
+**Definition of Done:**
+- [x] יצירת חיוב עובדת
+- [x] קישור תשלום נשלח ללקוח (Payment Modal)
+- [x] Webhook מקבל אירועים
+- [x] תשלום מאומת מעדכן DB
+- [x] Transaction status מתעדכן אוטומטית
+- [x] Payment Receipt email נשלח אוטומטית
+- [ ] החזר כספי (refund) - עדיין לא מומש (שלב עתידי)
 
 ---
 
-### 📨 שלב 6: הודעות ותזכורות
+### 📨 שלב 6: הודעות ותזכורות - **80% הושלם**
 
 **⏱️ זמן משוער:** 4-5 ימים  
 **🎯 מטרה:** שליחת הודעות אוטומטיות בזמנים נכונים
 
-#### משימות
+#### מה הושלם:
 
-```javascript
-// תור משימות עם Celery/BullMQ
-const notificationQueue = new Queue('notifications');
+- ✅ `EmailService` class - שירות אימייל מלא
+- ✅ `send_booking_confirmation` - אישור הזמנה מיידי (נשלח ב-`/book`)
+- ✅ `send_payment_receipt` - קבלת תשלום (נשלח ב-`/webhooks/stripe`)
+- ✅ `send_reminder_email` - תזכורת יומיים לפני הגעה
+- ✅ `send_reminders.py` - סקריפט לריצה יומית
+- ✅ תמיכה בכתובת וקואורדינטות (Waze/Google Maps)
+- ✅ HTML emails מעוצבים
+- ✅ RTL support בעברית
+- ⏳ תזמון אוטומטי (Celery/BullMQ) - עדיין לא מומש
 
-// הוספת משימה לתור
-async function scheduleNotifications(booking) {
-    // אישור מיידי
-    await notificationQueue.add('confirmation', {
-        booking_id: booking.id,
-        type: 'email',
-        template: 'booking_confirmation'
-    }, { delay: 0 });
-    
-    // תזכורת 3 ימים לפני
-    const reminderDate = moment(booking.check_in).subtract(3, 'days');
-    await notificationQueue.add('reminder', {
-        booking_id: booking.id,
-        type: 'email',
-        template: 'arrival_reminder'
-    }, { delay: reminderDate.diff(moment()) });
-    
-    // הוראות הגעה ביום ההגעה
-    const arrivalDate = moment(booking.check_in).hour(8);
-    await notificationQueue.add('directions', {
-        booking_id: booking.id,
-        type: 'sms',
-        template: 'arrival_directions'
-    }, { delay: arrivalDate.diff(moment()) });
-    
-    // הודעת תודה אחרי יציאה
-    const thankYouDate = moment(booking.check_out).add(1, 'day');
-    await notificationQueue.add('thank_you', {
-        booking_id: booking.id,
-        type: 'email',
-        template: 'thank_you_review'
-    }, { delay: thankYouDate.diff(moment()) });
-}
+**קבצים:**
+- `src/email_service.py` - EmailService class מלא
+- `src/api_server.py` - אינטגרציה ב-`/book` ו-`/webhooks/stripe`
+- `database/send_reminders.py` - סקריפט לריצה יומית
 
-// Worker שמטפל בהודעות
-notificationQueue.process(async (job) => {
-    const { booking_id, type, template } = job.data;
-    
-    const booking = await getBooking(booking_id);
-    const customer = await getCustomer(booking.customer_id);
-    
-    if (type === 'email') {
-        await sendEmail(customer.email, template, booking);
-    } else if (type === 'sms') {
-        await sendSMS(customer.phone, template, booking);
-    }
-});
+**תכונות:**
+- 📧 אישור הזמנה מיידי עם פרטים מלאים
+- 💰 קבלת תשלום עם פרטי תשלום
+- ⏰ תזכורת יומיים לפני הגעה
+- 📍 קישורי Waze/Google Maps
+- 🎨 HTML emails מעוצבים
+
+**איך להריץ תזכורות:**
+```bash
+# ריצה ידנית
+python database/send_reminders.py
+
+# או הגדר Scheduled Task (Windows) / Cron (Linux) לריצה יומית
 ```
+
+**מה חסר:**
+- ❌ תזמון אוטומטי (Celery/BullMQ) - כרגע צריך להריץ ידנית
+- ❌ הודעת תודה אחרי יציאה
+- ❌ הוראות הגעה ביום ההגעה
+- ❌ SMS Integration (אופציונלי)
+- ❌ התראות לבעל הצימר
 
 #### Definition of Done
 
-- [ ] אישור הזמנה נשלח מיידית
-- [ ] תזכורת נשלחת 3 ימים לפני
-- [ ] הוראות הגעה נשלחות ביום ההגעה
-- [ ] הודעת תודה נשלחת אחרי יציאה
-- [ ] התראות לבעל הצימר עובדות
-- [ ] לוג של כל ההודעות
+- [x] אישור הזמנה נשלח מיידית ✅
+- [x] קבלת תשלום נשלחת אוטומטית ✅
+- [x] תזכורת נשלחת יומיים לפני (סקריפט מוכן, צריך תזמון) ⏳
+- [ ] הוראות הגעה נשלחות ביום ההגעה ❌
+- [ ] הודעת תודה נשלחת אחרי יציאה ❌
+- [ ] התראות לבעל הצימר עובדות ❌
+- [ ] לוג של כל ההודעות (חלקי - רק ב-console) ⏳
 
 ---
 
@@ -1548,7 +2201,7 @@ npm run dev  # Node.js
 
 ## 📊 מצב פרויקט והצעד הבא
 
-**תאריך עדכון אחרון:** 2025-12-26
+**תאריך עדכון אחרון:** 2026-01-03
 
 ### 📈 התקדמות כללית
 
@@ -1557,14 +2210,14 @@ npm run dev  # Node.js
 שלב 2: חיבור ליומן         [██████████] 100% ✅ הושלם
 שלב 3: מנוע תמחור          [██████████] 100% ✅ הושלם
 שלב 4: מנגנון Hold          [██████████] 100% ✅ הושלם
-שלב 5: תשלומים             [░░░░░░░░░░]   0% ⏳ הבא
-שלב 6: הודעות               [░░░░░░░░░░]   0%
+שלב 5: תשלומים             [██████████] 100% ✅ הושלם
+שלב 6: הודעות               [████████░░]  80% ⏳ חלקי
 שלב 7: צ'אט באתר            [░░░░░░░░░░]   0%
 שלב 8: סוכן קולי            [░░░░░░░░░░]   0%
 שלב 9: דשבורד               [░░░░░░░░░░]   0%
 שלב 10: אופטימיזציה         [░░░░░░░░░░]   0%
 
-סה"כ: 40% הושלם (4 מתוך 10 שלבים)
+סה"כ: 58% הושלם (5.8 מתוך 10 שלבים)
 ```
 
 ### ✅ שלבים שהושלמו
@@ -1673,11 +2326,17 @@ database\run_check_stage3.bat
 - ✅ Database Integration - שמירת לקוחות והזמנות ב-DB
 - ✅ `/book` endpoint - תמיכה ב-Hold conversion
 - ✅ Fallback behavior - עובד גם בלי Redis (עם אזהרה)
+- ✅ Admin Panel - תצוגת Holds, Bookings, Audit Logs
+- ✅ Booking Details Modal - פתיחת פרטי הזמנה בלחיצה
+- ✅ Cancel Booking - ביטול הזמנה עם מחיקת Calendar event
 - ✅ בדיקות אוטומטיות (`database/check_stage4.py`)
 
 **קבצים:**
 - `src/hold.py` - HoldManager class
 - `src/db.py` - Database connection and utilities
+- `src/main.py` - Calendar functions (כולל `delete_calendar_event`)
+- `src/api_server.py` - API endpoints כולל Admin endpoints
+- `tools/features_picker.html` - UI מלא עם Admin Panel
 - `database/import_cabins_to_db.py` - Import cabins from Sheets to DB
 - `database/check_stage4.py` - בדיקות אוטומטיות
 
@@ -1686,6 +2345,18 @@ database\run_check_stage3.bat
 - `GET /hold/{hold_id}` - בדיקת סטטוס Hold
 - `DELETE /hold/{hold_id}` - שחרור Hold
 - `POST /book` - יצירת הזמנה (עם תמיכה ב-Hold)
+- `GET /admin/bookings` - רשימת כל ההזמנות
+- `GET /admin/bookings/{id}` - פרטי הזמנה ספציפית
+- `POST /admin/bookings/{id}/cancel` - ביטול הזמנה
+- `GET /admin/holds` - רשימת כל ה-Holds הפעילים
+- `GET /admin/audit` - Audit Logs
+
+**תכונות Admin Panel:**
+- 📊 Statistics - סטטיסטיקות כולל Total Revenue, On Hold, Confirmed
+- 📋 Bookings - רשימת הזמנות עם Filter לפי Status
+- 📝 Audit Log - יומן פעילות מלא
+- 🔍 Booking Details - לחיצה על הזמנה לפתיחת modal עם פרטים מלאים
+- ❌ Cancel Booking - ביטול הזמנה עם מחיקת Calendar event
 
 **איך לבדוק:**
 ```bash
@@ -1703,6 +2374,105 @@ database\run_import_cabins.bat
 
 ---
 
+### 💳 שלב 5: תשלום + אימות Webhooks - **100% הושלם**
+
+**מה הושלם:**
+- ✅ `PaymentManager` class - ניהול תשלומים עם Stripe
+- ✅ `create_payment_intent` - יצירת Payment Intent
+- ✅ `/book` endpoint - תמיכה ב-`create_payment: true`
+- ✅ `POST /webhooks/stripe` - Webhook handler מלא
+- ✅ אימות Webhook signature
+- ✅ טיפול ב-`payment_intent.succeeded`
+- ✅ טיפול ב-`payment_intent.payment_failed`
+- ✅ עדכון Transaction status ב-DB
+- ✅ שליחת Payment Receipt email אוטומטית
+- ✅ בדיקות אוטומטיות (`database/test_stage5_payments.py`)
+- ✅ UI מלא ב-`features_picker.html` - Payment Modal עם Mock mode
+
+**קבצים:**
+- `src/payment.py` - PaymentManager class
+- `src/api_server.py` - `/book` endpoint עם payment intent, `/webhooks/stripe`
+- `tools/features_picker.html` - Payment Modal עם Mock/Real Stripe
+- `database/test_stage5_payments.py` - בדיקות אוטומטיות
+
+**Endpoints:**
+- `POST /book` - יצירת הזמנה עם `create_payment: true` (יוצר Payment Intent)
+- `POST /webhooks/stripe` - Webhook handler ל-Stripe events
+
+**תכונות:**
+- 💳 יצירת Payment Intent עם metadata מלא
+- 🔐 אימות Webhook signature
+- ✅ עדכון Transaction status אוטומטי
+- 📧 שליחת Payment Receipt email אוטומטית
+- 🧪 Mock Payment Modal לבדיקות (ללא Stripe)
+
+**איך לבדוק:**
+```bash
+database\run_test_stage5.bat
+```
+
+**Definition of Done:**
+- [x] יצירת חיוב עובדת ✅
+- [x] קישור תשלום נשלח ללקוח (Payment Modal) ✅
+- [x] Webhook מקבל אירועים ✅
+- [x] תשלום מאומת מעדכן DB ✅
+- [x] Transaction status מתעדכן אוטומטית ✅
+- [x] Payment Receipt email נשלח אוטומטית ✅
+- [ ] החזר כספי (refund) - עדיין לא מומש (שלב עתידי) ⏳
+
+---
+
+### 📨 שלב 6: הודעות ותזכורות - **80% הושלם**
+
+**מה הושלם:**
+- ✅ `EmailService` class - שירות אימייל מלא
+- ✅ `send_booking_confirmation` - אישור הזמנה מיידי (נשלח ב-`/book`)
+- ✅ `send_payment_receipt` - קבלת תשלום (נשלח ב-`/webhooks/stripe`)
+- ✅ `send_reminder_email` - תזכורת יומיים לפני הגעה
+- ✅ `send_reminders.py` - סקריפט לריצה יומית
+- ✅ תמיכה בכתובת וקואורדינטות (Waze/Google Maps)
+- ✅ HTML emails מעוצבים
+- ✅ RTL support בעברית
+- ⏳ תזמון אוטומטי (Celery/BullMQ) - עדיין לא מומש
+
+**קבצים:**
+- `src/email_service.py` - EmailService class מלא
+- `src/api_server.py` - אינטגרציה ב-`/book` ו-`/webhooks/stripe`
+- `database/send_reminders.py` - סקריפט לריצה יומית
+
+**תכונות:**
+- 📧 אישור הזמנה מיידי עם פרטים מלאים
+- 💰 קבלת תשלום עם פרטי תשלום
+- ⏰ תזכורת יומיים לפני הגעה
+- 📍 קישורי Waze/Google Maps
+- 🎨 HTML emails מעוצבים
+
+**איך להריץ תזכורות:**
+```bash
+# ריצה ידנית
+python database/send_reminders.py
+
+# או הגדר Scheduled Task (Windows) / Cron (Linux) לריצה יומית
+```
+
+**מה חסר:**
+- ❌ תזמון אוטומטי (Celery/BullMQ) - כרגע צריך להריץ ידנית
+- ❌ הודעת תודה אחרי יציאה
+- ❌ הוראות הגעה ביום ההגעה
+- ❌ SMS Integration (אופציונלי)
+- ❌ התראות לבעל הצימר
+
+**Definition of Done:**
+- [x] אישור הזמנה נשלח מיידית ✅
+- [x] קבלת תשלום נשלחת אוטומטית ✅
+- [x] תזכורת נשלחת יומיים לפני (סקריפט מוכן, צריך תזמון) ⏳
+- [ ] הוראות הגעה נשלחות ביום ההגעה ❌
+- [ ] הודעת תודה נשלחת אחרי יציאה ❌
+- [ ] התראות לבעל הצימר עובדות ❌
+- [ ] לוג של כל ההודעות (חלקי - רק ב-console) ⏳
+
+---
+
 ### 💾 מה נשמר ב-DB כרגע?
 
 **✅ חלקית!** - המערכת שומרת חלק מהנתונים ב-DB:
@@ -1710,9 +2480,9 @@ database\run_import_cabins.bat
 **מה נשמר:**
 - ✅ `customers` - שמירת לקוחות חדשים (אוטומטי ב-`/book`)
 - ✅ `bookings` - שמירת כל הזמנה אחרי `/book` (אוטומטי)
+- ✅ `transactions` - שמירת תשלומים (אוטומטי ב-`/book` + Webhook)
 - ⏳ `cabins` - ניתן לייבא מ-Google Sheets ל-DB (סקריפט מוכן)
 - ❌ `pricing_rules` - עדיין hardcoded (שלב עתידי)
-- ❌ `transactions` - אחרי שלב 5 (תשלומים)
 
 **איך לייבא צימרים ל-DB:**
 ```bash
@@ -1723,50 +2493,57 @@ database\run_import_cabins.bat
 
 ---
 
-### ⏳ השלב הבא: שלב 5 - תשלומים
+### ⏳ השלב הבא: השלמת שלב 6 - תזמון אוטומטי להודעות
 
-**⏱️ זמן משוער:** 5-6 ימים  
-**🎯 מטרה:** אינטגרציה מלאה עם ספק סליקה  
-**🛠️ כלי:** Cursor (Python + FastAPI + Stripe/Tranzila)
+**⏱️ זמן משוער:** 2-3 ימים  
+**🎯 מטרה:** הוספת תזמון אוטומטי להודעות ותזכורות  
+**🛠️ כלי:** Cursor (Python + Celery או Scheduled Tasks)
 
 #### מה צריך לבנות:
 
-**1. Payment Gateway Integration:**
-- יצירת חיוב (Payment Intent)
-- קישור תשלום
-- Webhook handler לאימות תשלומים
+**1. תזמון אוטומטי:**
+- [ ] הגדרת Celery או Scheduled Tasks
+- [ ] תזמון תזכורות יומיות (2 ימים לפני הגעה)
+- [ ] תזמון הודעת תודה (אחרי יציאה)
+- [ ] תזמון הוראות הגעה (ביום ההגעה)
 
-**2. Transaction Management:**
-- שמירת תשלומים ב-DB
-- עדכון סטטוס הזמנה אחרי תשלום
-- ניהול החזרים
+**2. הודעות נוספות:**
+- [ ] הודעת תודה אחרי יציאה
+- [ ] הוראות הגעה ביום ההגעה
+- [ ] התראות לבעל הצימר (הזמנה חדשה, ביטול)
 
-**3. Hold Conversion:**
-- המרת Hold להזמנה אחרי תשלום מוצלח
-- שחרור Hold אם תשלום נכשל
+**3. לוגים:**
+- [ ] שמירת לוג של כל ההודעות ב-DB
+- [ ] טבלת `notifications` עם סטטוס
 
 #### Definition of Done:
-- [ ] יצירת חיוב עובדת
-- [ ] קישור תשלום נשלח ללקוח
-- [ ] Webhook מקבל אירועים
-- [ ] תשלום מאומת מעדכן DB
-- [ ] Hold מומר אוטומטית להזמנה
-- [ ] החזר כספי עובד
+- [x] אישור הזמנה נשלח מיידית ✅
+- [x] קבלת תשלום נשלחת אוטומטית ✅
+- [ ] תזכורת נשלחת אוטומטית יומיים לפני (צריך תזמון) ⏳
+- [ ] הוראות הגעה נשלחות ביום ההגעה ❌
+- [ ] הודעת תודה נשלחת אחרי יציאה ❌
+- [ ] התראות לבעל הצימר עובדות ❌
+- [ ] לוג של כל ההודעות ב-DB ❌
 
 ---
 
 ### 🎉 הישגים עד כה
 
-✅ **4 שלבים הושלמו בהצלחה!**
+✅ **5.8 שלבים הושלמו בהצלחה!**
 - מודל נתונים מוצק
 - חיבור ליומן עובד
 - מנוע תמחור מתקדם
+- מנגנון Hold למניעת דאבל בוקינג
+- אינטגרציה מלאה עם Stripe לתשלומים
+- מערכת אימייל (80% - חסר תזמון אוטומטי)
 
 ✅ **UI מלא:**
 - `features_picker.html` עם זרימה מלאה
 - טבלת מחירים מפורטת
 - בחירת addons
 - יצירת הזמנות
+- Admin Panel מלא (Statistics, Bookings, Audit Log)
+- Payment Modal (Mock + Real Stripe)
 
 ✅ **API עובד:**
 - `/health` - בדיקת בריאות
@@ -1774,6 +2551,10 @@ database\run_import_cabins.bat
 - `/availability` - בדיקת זמינות
 - `/quote` - הצעת מחיר
 - `/book` - יצירת הזמנה
+- `/hold` - ניהול Holds
+- `/webhooks/stripe` - Webhook handler
+- `/admin/bookings` - ניהול הזמנות
+- `/admin/audit` - Audit Logs
 
 ---
 

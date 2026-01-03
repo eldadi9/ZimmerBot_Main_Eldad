@@ -202,6 +202,140 @@
       border: 2px dashed #999;
     }
     
+    /* Date Range Picker Styles */
+    .date-range-picker-container {
+      position: relative;
+      min-width: 300px;
+    }
+    .date-range-display {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      font-family: inherit;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      background: white;
+      text-align: right;
+    }
+    .date-range-display:hover {
+      border-color: #2196F3;
+    }
+    .date-range-picker-modal {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      background: white;
+      border: 2px solid #2196F3;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      padding: 16px;
+      z-index: 1000;
+      min-width: 350px;
+    }
+    .date-range-picker-modal.visible {
+      display: block;
+    }
+    .calendar-grid-range {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .calendar-day-range {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .calendar-day-range:hover {
+      border-color: #2196F3;
+      background: #e3f2fd;
+    }
+    .calendar-day-range.other-month {
+      color: #ccc;
+      background: #f5f5f5;
+    }
+    .calendar-day-range.range-start {
+      background: #2196F3;
+      border-color: #1976D2;
+      color: white;
+      font-weight: bold;
+    }
+    .calendar-day-range.range-end {
+      background: #2196F3;
+      border-color: #1976D2;
+      color: white;
+      font-weight: bold;
+    }
+    .calendar-day-range.in-range {
+      background: #bbdefb;
+      border-color: #90caf9;
+      color: #1565C0;
+    }
+    .calendar-day-range.today {
+      border-color: #4CAF50;
+      font-weight: bold;
+    }
+    
+    /* Cabin Availability Table */
+    .cabin-availability-table {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 3px solid #2196F3;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      padding: 20px;
+      z-index: 2000;
+      max-width: 90%;
+      max-height: 80vh;
+      overflow: auto;
+      display: none;
+    }
+    .cabin-availability-table.visible {
+      display: block;
+    }
+    .availability-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .availability-table th,
+    .availability-table td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #ddd;
+    }
+    .availability-table th {
+      background: #2196F3;
+      color: white;
+      font-weight: bold;
+    }
+    .availability-table td.booked {
+      background: #ffcdd2;
+      color: #c62828;
+      font-weight: bold;
+    }
+    .availability-table td.available {
+      background: #c8e6c9;
+      color: #2e7d32;
+    }
+    .availability-table td.today {
+      border: 2px solid #4CAF50;
+      font-weight: bold;
+    }
+    
     .btn-primary { 
       background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); 
       color: white; 
@@ -430,13 +564,25 @@
 
     <div class="card">
       <div class="row">
-        <div style="min-width:260px">
-          <label>📅 תאריך ושעת כניסה (Check-in)</label>
-          <input id="check_in" type="datetime-local" value="2026-02-01T15:00" />
-        </div>
-        <div style="min-width:260px">
-          <label>📅 תאריך ושעת יציאה (Check-out)</label>
-          <input id="check_out" type="datetime-local" value="2026-02-02T11:00" />
+        <div class="date-range-picker-container" style="min-width:300px">
+          <label>📅 בחר תאריכים (גרור מתאריך עד תאריך)</label>
+          <div class="date-range-display" id="date_range_display" onclick="toggleDateRangePicker()">
+            בחר תאריכים...
+          </div>
+          <input type="hidden" id="check_in" value="2026-02-01T15:00" />
+          <input type="hidden" id="check_out" value="2026-02-02T11:00" />
+          <div class="date-range-picker-modal" id="date_range_picker">
+            <div class="calendar-header">
+              <button class="calendar-month-nav" onclick="prevMonthRange()">◀</button>
+              <h3 style="margin: 0;" id="calendar_month_display">פברואר 2026</h3>
+              <button class="calendar-month-nav" onclick="nextMonthRange()">▶</button>
+            </div>
+            <div class="calendar-grid-range" id="calendar_grid_range"></div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 2px solid #e0e0e0;">
+              <button class="btn-primary" onclick="confirmDateRange()" style="width: 100%;">אישור</button>
+              <button class="btn-danger" onclick="clearDateRange()" style="width: 100%; margin-top: 8px;">נקה</button>
+            </div>
+          </div>
         </div>
         <div style="min-width:160px">
           <label>👥 מבוגרים (Adults)</label>
@@ -543,7 +689,25 @@
           <div id="addons_container"></div>
         </div>
         
+        <!-- Hold Status Display -->
+        <div id="hold_status_container" style="margin-top: 20px; display: none;">
+          <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong>🔒 Hold פעיל</strong><br/>
+                <span id="hold_countdown" style="font-size: 14px; color: #856404;"></span>
+              </div>
+              <button id="btn_cancel_hold" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">
+                ✕ ביטול Hold
+              </button>
+            </div>
+          </div>
+        </div>
+        
         <div style="margin-top: 20px;">
+          <button id="btn_create_hold" class="btn-primary" style="width: 100%; padding: 14px; font-size: 16px; display: none; margin-bottom: 8px;">
+            🔒 צור Hold (15 דקות)
+          </button>
           <button id="btn_book_final" class="btn-success" style="width: 100%; padding: 14px; font-size: 16px; display: none;">
             📅 צור הזמנה
           </button>
@@ -579,6 +743,9 @@
           <label>טלפון:</label>
           <input type="text" id="modal_phone" placeholder="050-1234567" />
           
+          <label>אימייל:</label>
+          <input type="email" id="modal_email" placeholder="customer@example.com" />
+          
           <label>הערות:</label>
           <textarea id="modal_notes" rows="3" placeholder="הערות נוספות..."></textarea>
           
@@ -588,6 +755,21 @@
           </div>
         </form>
         <div id="booking_result" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    <!-- Modal לתשלום -->
+    <div id="paymentModal" class="modal">
+      <div class="modal-content" style="max-width: 700px;">
+        <span class="close" onclick="closePaymentModal()">&times;</span>
+        <h2 style="text-align: center; color: #4caf50;">💳 תשלום</h2>
+        
+        <div id="payment_content" style="padding: 20px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 48px; margin-bottom: 10px;">⏳</div>
+            <p style="color: #666;">טוען פרטי תשלום...</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -600,6 +782,7 @@
     const AVAILABILITY_URL = `${API_BASE}/availability`;
     const QUOTE_URL = `${API_BASE}/quote`;
     const BOOKING_URL = `${API_BASE}/book`;
+    const HOLD_URL = `${API_BASE}/hold`;
     
     // Available addons
     const AVAILABLE_ADDONS = [
@@ -614,6 +797,9 @@
     let selectedCabinId = null;
     let currentQuote = null;
     let selectedAddons = [];
+    let currentHoldId = null;
+    let holdExpiresAt = null;
+    let holdCountdownInterval = null;
 
     function toNullOrNumber(v) {
       const s = (v ?? "").toString().trim();
@@ -872,7 +1058,10 @@
         }
         
         html += `
-          <div class="cabin-item" data-cabin-id="${cabin.cabin_id}" onclick="selectCabin('${cabin.cabin_id}')">
+          <div class="cabin-item" data-cabin-id="${cabin.cabin_id}" 
+               onmouseenter="showCabinAvailability('${cabin.cabin_id}')" 
+               onmouseleave="hideCabinAvailability()"
+               onclick="selectCabin('${cabin.cabin_id}')">
             ${imagesHtml}
             <div class="cabin-name">${cabin.name || cabin.cabin_id}</div>
             <div class="cabin-details">
@@ -890,6 +1079,14 @@
       });
       
       resultsDiv.innerHTML = html;
+      
+      // Add availability table to body if doesn't exist
+      if (!el("cabin_availability_table")) {
+        const table = document.createElement('div');
+        table.id = 'cabin_availability_table';
+        table.className = 'cabin-availability-table';
+        document.body.appendChild(table);
+      }
     }
     
     async function selectCabin(cabinId) {
@@ -1110,6 +1307,12 @@
       
       el("pricing_table_container").innerHTML = html;
       el("btn_book_final").style.display = "block";
+      el("btn_create_hold").style.display = "block";
+      
+      // אם יש Hold פעיל, הצג אותו
+      if (currentHoldId) {
+        updateHoldStatus();
+      }
     }
     
     function renderAddons() {
@@ -1202,6 +1405,7 @@
       el("modal_cabin_id").value = cabinId;
       el("modal_customer").value = "";
       el("modal_phone").value = "";
+      el("modal_email").value = "";
       el("modal_notes").value = "";
       el("booking_result").innerHTML = "";
       
@@ -1266,6 +1470,7 @@
         cabin_id: el("modal_cabin_id").value,
         customer: el("modal_customer").value || null,
         phone: el("modal_phone").value.trim() || null,
+        email: el("modal_email").value.trim() || null,
         notes: el("modal_notes").value.trim() || null,
         check_in: formatDateTimeForAPI(el("check_in").value),
         check_out: formatDateTimeForAPI(el("check_out").value),
@@ -1284,12 +1489,146 @@
       el("bookingModal").style.display = "none";
     }
     
+    // Hold Management Functions
+    async function createHold() {
+      // Use selectedCabinId or get from modal
+      const cabinId = selectedCabinId || el("modal_cabin_id")?.value;
+      
+      if (!cabinId) {
+        alert("אנא בחר צימר קודם - לחץ על צימר מהרשימה");
+        return;
+      }
+      
+      const checkIn = formatDateTimeForAPI(el("check_in").value);
+      const checkOut = formatDateTimeForAPI(el("check_out").value);
+      
+      if (!checkIn || !checkOut) {
+        alert("אנא בחר תאריכי כניסה ויציאה");
+        return;
+      }
+      
+      const customer = el("modal_customer")?.value || "לקוח";
+      
+      el("btn_create_hold").disabled = true;
+      el("btn_create_hold").textContent = "⏳ יוצר Hold...";
+      
+      try {
+        const holdData = {
+          cabin_id: cabinId,
+          check_in: checkIn,
+          check_out: checkOut,
+          customer_name: customer
+        };
+        
+        const r = await fetch(HOLD_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(holdData)
+        });
+        
+        const result = await r.json();
+        
+        if (r.ok && result.hold_id) {
+          currentHoldId = result.hold_id;
+          holdExpiresAt = new Date(result.expires_at);
+          
+          el("hold_status_container").style.display = "block";
+          el("btn_create_hold").style.display = "none";
+          el("btn_book_final").style.display = "block";
+          
+          updateHoldStatus();
+          startHoldCountdown();
+          
+          alert(`✅ Hold נוצר בהצלחה!\nתפוגה: ${result.expires_at}\nיש לך 15 דקות להשלים את ההזמנה.`);
+        } else {
+          alert(`❌ שגיאה ביצירת Hold: ${result.detail || result.message || JSON.stringify(result)}`);
+          el("btn_create_hold").disabled = false;
+          el("btn_create_hold").textContent = "🔒 צור Hold (15 דקות)";
+        }
+      } catch (e) {
+        alert(`❌ שגיאה: ${e?.message || e}`);
+        el("btn_create_hold").disabled = false;
+        el("btn_create_hold").textContent = "🔒 צור Hold (15 דקות)";
+      }
+    }
+    
+    async function cancelHold() {
+      if (!currentHoldId) return;
+      
+      if (!confirm("האם אתה בטוח שברצונך לבטל את ה-Hold?")) {
+        return;
+      }
+      
+      try {
+        const r = await fetch(`${HOLD_URL}/${currentHoldId}`, {
+          method: "DELETE"
+        });
+        
+        if (r.ok) {
+          currentHoldId = null;
+          holdExpiresAt = null;
+          el("hold_status_container").style.display = "none";
+          el("btn_create_hold").style.display = "block";
+          
+          if (holdCountdownInterval) {
+            clearInterval(holdCountdownInterval);
+            holdCountdownInterval = null;
+          }
+          
+          alert("✅ Hold בוטל בהצלחה");
+        } else {
+          const result = await r.json();
+          alert(`❌ שגיאה בביטול Hold: ${result.detail || result.message}`);
+        }
+      } catch (e) {
+        alert(`❌ שגיאה: ${e?.message || e}`);
+      }
+    }
+    
+    function updateHoldStatus() {
+      if (!holdExpiresAt) return;
+      
+      const now = new Date();
+      const diff = holdExpiresAt - now;
+      
+      if (diff <= 0) {
+        // Hold פג תוקף
+        currentHoldId = null;
+        holdExpiresAt = null;
+        el("hold_status_container").style.display = "none";
+        el("btn_create_hold").style.display = "block";
+        
+        if (holdCountdownInterval) {
+          clearInterval(holdCountdownInterval);
+          holdCountdownInterval = null;
+        }
+        
+        alert("⏰ Hold פג תוקף. אנא צור Hold חדש.");
+        return;
+      }
+      
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      
+      el("hold_countdown").textContent = `נשארו: ${minutes}:${seconds.toString().padStart(2, '0')} דקות`;
+    }
+    
+    function startHoldCountdown() {
+      if (holdCountdownInterval) {
+        clearInterval(holdCountdownInterval);
+      }
+      
+      updateHoldStatus();
+      holdCountdownInterval = setInterval(updateHoldStatus, 1000);
+    }
+    
     async function createBooking(event) {
       event.preventDefault();
       
       const cabinId = el("modal_cabin_id").value;
       const customer = el("modal_customer").value;
       const phone = el("modal_phone").value;
+      const email = el("modal_email").value;
       const notes = el("modal_notes").value;
       const checkIn = formatDateTimeForAPI(el("check_in").value);
       const checkOut = formatDateTimeForAPI(el("check_out").value);
@@ -1306,6 +1645,7 @@
         cabin_id: cabinId,
         customer: customer,
         phone: phone || null,
+        email: email || null,
         notes: notes || null,
         check_in: checkIn,
         check_out: checkOut,
@@ -1314,9 +1654,21 @@
         total_price: totalPrice
       };
       
+      // הוסף hold_id אם קיים
+      if (currentHoldId) {
+        bookingData.hold_id = currentHoldId;
+      }
+      
       // הוסף addons אם יש
       if (selectedAddons.length > 0) {
         bookingData.addons = selectedAddons;
+      }
+      
+      // הוסף תמיכה בתשלום (שלב 5)
+      // בדוק אם יש checkbox או אפשרות אחרת ליצירת תשלום
+      // בינתיים, נשתמש ב-create_payment: true אם יש מחיר
+      if (totalPrice && totalPrice > 0) {
+        bookingData.create_payment = true;
       }
       
       el("booking_result").innerHTML = "<div style='padding: 10px;'>⏳ יוצר הזמנה...</div>";
@@ -1333,20 +1685,84 @@
         try { result = JSON.parse(text); } catch { result = { error: text }; }
         
         if (r.ok && result.success) {
+          // נקה Hold אחרי הזמנה מוצלחת
+          if (currentHoldId) {
+            currentHoldId = null;
+            holdExpiresAt = null;
+            el("hold_status_container").style.display = "none";
+            el("btn_create_hold").style.display = "block";
+            
+            if (holdCountdownInterval) {
+              clearInterval(holdCountdownInterval);
+              holdCountdownInterval = null;
+            }
+          }
+          
+          // בדוק אם יש Payment Intent
+          const hasPayment = result.payment_intent_id && result.client_secret;
+          
+          // שמור את פרטי התשלום למשתנה גלובלי
+          if (hasPayment) {
+            window.currentPaymentIntent = {
+              payment_intent_id: result.payment_intent_id,
+              client_secret: result.client_secret,
+              booking_id: result.booking_id,
+              amount: totalPrice || 0
+            };
+          }
+          
           el("booking_result").innerHTML = `
-            <div style='color: #0a7; padding: 10px; background: #e8f5e9; border-radius: 4px;'>
-              ✅ <strong>הזמנה נוצרה בהצלחה!</strong><br/>
-              Event ID: ${result.event_id || 'N/A'}<br/>
-              ${result.event_link ? `<a href="${result.event_link}" target="_blank">🔗 פתח ביומן Google</a>` : ''}
+            <div style='color: #0a7; padding: 15px; background: #e8f5e9; border-radius: 8px; border: 2px solid #4caf50;'>
+              <div style='text-align: center; margin-bottom: 15px;'>
+                <div style='font-size: 48px; margin-bottom: 10px;'>✅</div>
+                <h2 style='margin: 0; color: #2e7d32;'>הזמנה נוצרה בהצלחה!</h2>
+              </div>
+              <div style='background: white; padding: 15px; border-radius: 6px; margin-bottom: 15px;'>
+                ${result.booking_id ? `<p><strong>מספר הזמנה:</strong> ${result.booking_id.substring(0, 8)}...</p>` : ''}
+                <p><strong>Event ID:</strong> ${result.event_id || 'N/A'}</p>
+                ${result.event_link ? `<p><a href="${result.event_link}" target="_blank" style='color: #2196F3; text-decoration: none;'>🔗 פתח ביומן Google</a></p>` : ''}
+                ${totalPrice ? `<p><strong>סכום לתשלום:</strong> ${totalPrice} ILS</p>` : ''}
+              </div>
+              ${hasPayment || (totalPrice && totalPrice > 0) ? `
+                <div style='text-align: center; margin-top: 20px;'>
+                  <button onclick="openPaymentModal()" 
+                          style='padding: 15px 30px; background: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>
+                    💳 ${hasPayment ? 'המשך לתשלום' : 'המשך לתשלום (בדיקה)'}
+                  </button>
+                </div>
+              ` : `
+                <div style='padding: 10px; background: #fff3cd; border-radius: 6px; margin-top: 15px; text-align: center;'>
+                  <p style='margin: 0; color: #856404;'>ℹ️ תשלום לא מוגדר - הזמנה נוצרה ללא תשלום</p>
+                </div>
+                <div style='text-align: center; margin-top: 15px;'>
+                  <button onclick="closeBookingModal(); checkAvailability();" 
+                          style='padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer;'>
+                    סגור
+                  </button>
+                </div>
+              `}
             </div>
           `;
           
-          // סגור את החלון אחרי 3 שניות
-          setTimeout(() => {
-            closeBookingModal();
-            // רענן זמינות
-            checkAvailability();
-          }, 3000);
+          // אם יש תשלום, פתח את modal התשלום אוטומטית אחרי 2 שניות
+          // גם אם אין Payment Intent, פתח modal לבדיקה
+          if (hasPayment) {
+            setTimeout(() => {
+              openPaymentModal();
+            }, 2000);
+          } else if (totalPrice && totalPrice > 0) {
+            // גם בלי Payment Intent, פתח modal תשלום לבדיקה
+            window.currentPaymentIntent = {
+              payment_intent_id: null,
+              client_secret: null,
+              booking_id: result.booking_id,
+              amount: totalPrice || 0,
+              is_mock: true // סימון שזה mock לבדיקה
+            };
+            setTimeout(() => {
+              openPaymentModal();
+            }, 2000);
+          }
         } else {
           el("booking_result").innerHTML = `
             <div style='color: #c00; padding: 10px; background: #ffebee; border-radius: 4px;'>
@@ -1364,18 +1780,576 @@
       }
     }
     
+    // Payment Modal Functions
+    function openPaymentModal() {
+      const paymentIntent = window.currentPaymentIntent;
+      if (!paymentIntent) {
+        alert('אין פרטי תשלום זמינים');
+        return;
+      }
+      
+      const isMock = paymentIntent.is_mock || !paymentIntent.client_secret;
+      const content = el("payment_content");
+      
+      if (isMock) {
+        // Mock payment modal for testing
+        content.innerHTML = `
+          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #333;">פרטי התשלום (מצב בדיקה)</h3>
+            <p><strong>מספר הזמנה:</strong> ${paymentIntent.booking_id ? paymentIntent.booking_id.substring(0, 8) + '...' : 'N/A'}</p>
+            <p><strong>סכום לתשלום:</strong> <span style="font-size: 24px; color: #4caf50; font-weight: bold;">${paymentIntent.amount} ILS</span></p>
+            <div style="background: #fff3cd; padding: 10px; border-radius: 6px; margin-top: 10px;">
+              <p style="margin: 0; color: #856404;">⚠️ זהו מצב בדיקה - Stripe לא מוגדר</p>
+            </div>
+          </div>
+          
+          <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h4 style="margin-top: 0; color: #1976d2;">💳 שיטות תשלום זמינות (לאחר הגדרת Stripe):</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px;">
+              <div style="padding: 15px; background: white; border-radius: 6px; text-align: center; border: 2px solid #ddd;">
+                <div style="font-size: 32px; margin-bottom: 5px;">💳</div>
+                <strong>כרטיס אשראי</strong>
+              </div>
+              <div style="padding: 15px; background: white; border-radius: 6px; text-align: center; border: 2px solid #ddd;">
+                <div style="font-size: 32px; margin-bottom: 5px;">📱</div>
+                <strong>ביט</strong>
+              </div>
+              <div style="padding: 15px; background: white; border-radius: 6px; text-align: center; border: 2px solid #ddd;">
+                <div style="font-size: 32px; margin-bottom: 5px;">🔵</div>
+                <strong>פייבוקס</strong>
+              </div>
+              <div style="padding: 15px; background: white; border-radius: 6px; text-align: center; border: 2px solid #ddd;">
+                <div style="font-size: 32px; margin-bottom: 5px;">💵</div>
+                <strong>מזומן במקום</strong>
+              </div>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <button onclick="closePaymentModal(); closeBookingModal(); checkAvailability();" 
+                    style="padding: 12px 24px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; margin: 5px;">
+              סגור
+            </button>
+          </div>
+        `;
+      } else {
+        // Real Stripe payment modal
+        content.innerHTML = `
+          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #333;">פרטי התשלום</h3>
+            <p><strong>מספר הזמנה:</strong> ${paymentIntent.booking_id ? paymentIntent.booking_id.substring(0, 8) + '...' : 'N/A'}</p>
+            <p><strong>סכום לתשלום:</strong> <span style="font-size: 24px; color: #4caf50; font-weight: bold;">${paymentIntent.amount} ILS</span></p>
+            <p><strong>Payment Intent ID:</strong> <small style="font-family: monospace;">${paymentIntent.payment_intent_id}</small></p>
+          </div>
+          
+          <!-- Stripe Checkout Form -->
+          <div id="stripe_checkout_container" style="margin-bottom: 20px;">
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <h4 style="margin-top: 0; color: #1976d2;">💳 בחר שיטת תשלום:</h4>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;">
+                <label style="padding: 12px; background: white; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; text-align: center;">
+                  <input type="radio" name="payment_method" value="card" checked style="margin-left: 5px;">
+                  💳 כרטיס אשראי
+                </label>
+                <label style="padding: 12px; background: white; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; text-align: center;">
+                  <input type="radio" name="payment_method" value="bit" style="margin-left: 5px;">
+                  📱 ביט
+                </label>
+                <label style="padding: 12px; background: white; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; text-align: center;">
+                  <input type="radio" name="payment_method" value="paybox" style="margin-left: 5px;">
+                  🔵 פייבוקס
+                </label>
+                <label style="padding: 12px; background: white; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; text-align: center;">
+                  <input type="radio" name="payment_method" value="cash" style="margin-left: 5px;">
+                  💵 מזומן במקום
+                </label>
+              </div>
+            </div>
+            
+            <!-- Stripe Elements will be mounted here -->
+            <div id="stripe_card_element" style="padding: 15px; background: white; border-radius: 8px; border: 2px solid #ddd; margin-bottom: 15px;">
+              <p style="margin: 0; color: #666;">טוען טופס תשלום...</p>
+            </div>
+            
+            <div id="stripe_error" style="color: #c00; margin-bottom: 15px; display: none;"></div>
+            
+            <button id="stripe_submit_btn" onclick="processStripePayment()" 
+                    style="width: 100%; padding: 15px; background: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold;">
+              💳 שלם ${paymentIntent.amount} ILS
+            </button>
+          </div>
+          
+          <div style="text-align: center; margin-top: 20px;">
+            <button onclick="window.open('https://dashboard.stripe.com/test/payments', '_blank')" 
+                    style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin: 5px;">
+              🔗 פתח Stripe Dashboard
+            </button>
+            <button onclick="closePaymentModal(); closeBookingModal(); checkAvailability();" 
+                    style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin: 5px;">
+              ביטול
+            </button>
+          </div>
+        `;
+        
+        // Initialize Stripe Elements
+        if (paymentIntent.client_secret) {
+          initializeStripeCheckout(paymentIntent.client_secret);
+        }
+      }
+      
+      el("paymentModal").style.display = "block";
+    }
+    
+    // Initialize Stripe Checkout
+    let stripe = null;
+    let cardElement = null;
+    let elements = null;
+    
+    function initializeStripeCheckout(clientSecret) {
+      // Load Stripe.js
+      if (!window.Stripe) {
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.onload = () => {
+          stripe = Stripe('pk_test_51Q...'); // Replace with your publishable key
+          elements = stripe.elements();
+          cardElement = elements.create('card', {
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#424770',
+                '::placeholder': {
+                  color: '#aab7c4',
+                },
+              },
+            },
+          });
+          cardElement.mount('#stripe_card_element');
+        };
+        document.head.appendChild(script);
+      } else {
+        stripe = Stripe('pk_test_51Q...'); // Replace with your publishable key
+        elements = stripe.elements();
+        cardElement = elements.create('card');
+        cardElement.mount('#stripe_card_element');
+      }
+    }
+    
+    async function processStripePayment() {
+      const paymentIntent = window.currentPaymentIntent;
+      if (!paymentIntent || !paymentIntent.client_secret) {
+        alert('אין פרטי תשלום זמינים');
+        return;
+      }
+      
+      const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+      
+      if (selectedMethod === 'cash') {
+        // Cash payment - mark as completed manually
+        alert('תשלום במזומן - ההזמנה תאושר לאחר התשלום במקום');
+        closePaymentModal();
+        closeBookingModal();
+        checkAvailability();
+        return;
+      }
+      
+      if (!stripe || !cardElement) {
+        alert('Stripe לא נטען. אנא רענן את הדף.');
+        return;
+      }
+      
+      const submitBtn = el("stripe_submit_btn");
+      const errorDiv = el("stripe_error");
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ מעבד תשלום...';
+      errorDiv.style.display = 'none';
+      
+      try {
+        const {error, paymentIntent: confirmedPayment} = await stripe.confirmCardPayment(
+          paymentIntent.client_secret,
+          {
+            payment_method: {
+              card: cardElement,
+            }
+          }
+        );
+        
+        if (error) {
+          errorDiv.textContent = error.message;
+          errorDiv.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.textContent = `💳 שלם ${paymentIntent.amount} ILS`;
+        } else if (confirmedPayment && confirmedPayment.status === 'succeeded') {
+          el("payment_content").innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+              <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+              <h2 style="color: #4caf50; margin-bottom: 20px;">תשלום הושלם בהצלחה!</h2>
+              <p style="color: #666; margin-bottom: 30px;">ההזמנה שלך אושרה ותתקבל הודעה במייל</p>
+              <button onclick="closePaymentModal(); closeBookingModal(); checkAvailability();" 
+                      style="padding: 15px 30px; background: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">
+                סגור
+              </button>
+            </div>
+          `;
+        }
+      } catch (err) {
+        errorDiv.textContent = 'שגיאה בעיבוד התשלום: ' + err.message;
+        errorDiv.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = `💳 שלם ${paymentIntent.amount} ILS`;
+      }
+    }
+    
+    function closePaymentModal() {
+      el("paymentModal").style.display = "none";
+    }
+    
+    function copyClientSecret() {
+      const paymentIntent = window.currentPaymentIntent;
+      if (!paymentIntent || !paymentIntent.client_secret) {
+        alert('אין Client Secret להעתקה');
+        return;
+      }
+      
+      navigator.clipboard.writeText(paymentIntent.client_secret).then(() => {
+        alert('✅ Client Secret הועתק ללוח!');
+      }).catch(err => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = paymentIntent.client_secret;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert('✅ Client Secret הועתק ללוח!');
+      });
+    }
+    
     // סגירת modal בלחיצה על X או מחוץ לחלון
     window.onclick = function(event) {
-      const modal = el("bookingModal");
-      if (event.target == modal) {
+      const bookingModal = el("bookingModal");
+      const paymentModal = el("paymentModal");
+      if (event.target == bookingModal) {
         closeBookingModal();
+      }
+      if (event.target == paymentModal) {
+        closePaymentModal();
       }
     }
     
     document.querySelector('.close').onclick = closeBookingModal;
 
+    // Date Range Picker Variables
+    let dateRangeStart = null;
+    let dateRangeEnd = null;
+    let currentCalendarMonth = new Date().getMonth();
+    let currentCalendarYear = new Date().getFullYear();
+    
+    // Date Range Picker Functions
+    function toggleDateRangePicker() {
+      const picker = el("date_range_picker");
+      picker.classList.toggle("visible");
+      if (picker.classList.contains("visible")) {
+        renderDateRangeCalendar();
+      }
+    }
+    
+    function renderDateRangeCalendar() {
+      const grid = el("calendar_grid_range");
+      const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+      const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+      
+      el("calendar_month_display").textContent = `${monthNames[currentCalendarMonth]} ${currentCalendarYear}`;
+      
+      const firstDay = new Date(currentCalendarYear, currentCalendarMonth, 1);
+      const lastDay = new Date(currentCalendarYear, currentCalendarMonth + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDayOfWeek = firstDay.getDay();
+      
+      let html = '';
+      
+      // Day headers
+      dayNames.forEach(day => {
+        html += `<div class="calendar-day-header">${day}</div>`;
+      });
+      
+      // Days from previous month
+      for (let i = 0; i < startingDayOfWeek; i++) {
+        const date = new Date(currentCalendarYear, currentCalendarMonth, -i);
+        html += `<div class="calendar-day-range other-month">${date.getDate()}</div>`;
+      }
+      
+      // Days of current month
+      const today = new Date();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(currentCalendarYear, currentCalendarMonth, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const isToday = date.toDateString() === today.toDateString();
+        
+        let classes = 'calendar-day-range';
+        if (isToday) classes += ' today';
+        
+        // Check if in range
+        if (dateRangeStart && dateRangeEnd) {
+          if (dateStr === dateRangeStart) {
+            classes += ' range-start';
+          } else if (dateStr === dateRangeEnd) {
+            classes += ' range-end';
+          } else if (dateStr > dateRangeStart && dateStr < dateRangeEnd) {
+            classes += ' in-range';
+          }
+        } else if (dateRangeStart && dateStr === dateRangeStart) {
+          classes += ' range-start';
+        }
+        
+        html += `<div class="${classes}" data-date="${dateStr}" onclick="selectDateRange('${dateStr}')">${day}</div>`;
+      }
+      
+      // Days from next month
+      const totalCells = startingDayOfWeek + daysInMonth;
+      const remainingCells = 7 - (totalCells % 7);
+      if (remainingCells < 7) {
+        for (let day = 1; day <= remainingCells; day++) {
+          const date = new Date(currentCalendarYear, currentCalendarMonth + 1, day);
+          html += `<div class="calendar-day-range other-month">${date.getDate()}</div>`;
+        }
+      }
+      
+      grid.innerHTML = html;
+    }
+    
+    function selectDateRange(dateStr) {
+      if (!dateRangeStart || (dateRangeStart && dateRangeEnd)) {
+        // Start new range
+        dateRangeStart = dateStr;
+        dateRangeEnd = null;
+      } else {
+        // Complete range
+        if (dateStr < dateRangeStart) {
+          // Swap if end is before start
+          dateRangeEnd = dateRangeStart;
+          dateRangeStart = dateStr;
+        } else {
+          dateRangeEnd = dateStr;
+        }
+      }
+      
+      renderDateRangeCalendar();
+      updateDateRangeDisplay();
+    }
+    
+    function updateDateRangeDisplay() {
+      const display = el("date_range_display");
+      if (dateRangeStart && dateRangeEnd) {
+        const startDate = new Date(dateRangeStart + 'T15:00');
+        const endDate = new Date(dateRangeEnd + 'T11:00');
+        display.textContent = `${startDate.toLocaleDateString('he-IL')} - ${endDate.toLocaleDateString('he-IL')}`;
+        
+        // Update hidden inputs
+        el("check_in").value = startDate.toISOString().slice(0, 16);
+        el("check_out").value = endDate.toISOString().slice(0, 16);
+        
+        refreshOutputs();
+      } else if (dateRangeStart) {
+        const startDate = new Date(dateRangeStart + 'T15:00');
+        display.textContent = `מ-${startDate.toLocaleDateString('he-IL')} - בחר תאריך סיום`;
+      } else {
+        display.textContent = 'בחר תאריכים...';
+      }
+    }
+    
+    function confirmDateRange() {
+      if (dateRangeStart && dateRangeEnd) {
+        el("date_range_picker").classList.remove("visible");
+        checkAvailability();
+      } else {
+        alert('אנא בחר תאריך התחלה ותאריך סיום');
+      }
+    }
+    
+    function clearDateRange() {
+      dateRangeStart = null;
+      dateRangeEnd = null;
+      el("check_in").value = '';
+      el("check_out").value = '';
+      updateDateRangeDisplay();
+      renderDateRangeCalendar();
+    }
+    
+    function prevMonthRange() {
+      currentCalendarMonth--;
+      if (currentCalendarMonth < 0) {
+        currentCalendarMonth = 11;
+        currentCalendarYear--;
+      }
+      renderDateRangeCalendar();
+    }
+    
+    function nextMonthRange() {
+      currentCalendarMonth++;
+      if (currentCalendarMonth > 11) {
+        currentCalendarMonth = 0;
+        currentCalendarYear++;
+      }
+      renderDateRangeCalendar();
+    }
+    
+    // Cabin Availability Table Functions
+    let availabilityTableTimer = null;
+    let currentCabinAvailability = null;
+    
+    async function showCabinAvailability(cabinId) {
+      if (availabilityTableTimer) {
+        clearTimeout(availabilityTableTimer);
+      }
+      
+      availabilityTableTimer = setTimeout(async () => {
+        try {
+          const today = new Date();
+          const endDate = new Date(today);
+          endDate.setDate(endDate.getDate() + 60);
+          
+          const response = await fetch(`${API_BASE}/availability?check_in=${today.toISOString().split('T')[0]} 15:00&check_out=${endDate.toISOString().split('T')[0]} 11:00&cabin_id=${encodeURIComponent(cabinId)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
+          
+          if (!response.ok) return;
+          
+          const availableCabins = await response.json();
+          const cabin = availableCabins.find(c => (c.cabin_id === cabinId || c.cabin_id === cabinId.replace(/-/g, '')));
+          
+          if (!cabin) {
+            // Cabin not available - get calendar to show booked dates
+            await loadCabinAvailabilityTable(cabinId, today, endDate);
+          } else {
+            // Cabin is available - show availability table
+            await loadCabinAvailabilityTable(cabinId, today, endDate);
+          }
+        } catch (error) {
+          console.error('Error loading availability:', error);
+        }
+      }, 300);
+    }
+    
+    async function loadCabinAvailabilityTable(cabinId, startDate, endDate) {
+      try {
+        // Get calendar events for this cabin
+        const response = await fetch(`${API_BASE}/cabin/calendar/${encodeURIComponent(cabinId)}?start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`);
+        
+        if (!response.ok) {
+          // If endpoint doesn't exist, create simple table from availability check
+          renderSimpleAvailabilityTable(cabinId);
+          return;
+        }
+        
+        const data = await response.json();
+        const bookedDates = new Set(data.booked_dates || []);
+        
+        // Create table
+        const table = el("cabin_availability_table");
+        if (!table) {
+          // Create table if doesn't exist
+          const newTable = document.createElement('div');
+          newTable.id = 'cabin_availability_table';
+          newTable.className = 'cabin-availability-table';
+          document.body.appendChild(newTable);
+        }
+        
+        // Find cabin name
+        const cabin = availableCabins.find(c => (c.cabin_id === cabinId || c.cabin_id === cabinId.replace(/-/g, '')));
+        const cabinName = cabin ? cabin.name : cabinId;
+        
+        let html = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; color: #2196F3;">📅 זמינות: ${cabinName}</h3>
+            <button class="btn-danger" onclick="hideCabinAvailability()" style="padding: 6px 12px;">✕</button>
+          </div>
+          <table class="availability-table">
+            <thead>
+              <tr>
+                <th>תאריך</th>
+                <th>יום</th>
+                <th>סטטוס</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        const today = new Date();
+        let current = new Date(startDate);
+        
+        while (current <= endDate) {
+          const dateStr = current.toISOString().split('T')[0];
+          const isBooked = bookedDates.has(dateStr);
+          const isToday = current.toDateString() === today.toDateString();
+          const dayName = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][current.getDay()];
+          
+          html += `
+            <tr>
+              <td class="${isToday ? 'today' : ''}">${current.toLocaleDateString('he-IL')}</td>
+              <td class="${isToday ? 'today' : ''}">${dayName}</td>
+              <td class="${isBooked ? 'booked' : 'available'}">${isBooked ? '❌ תפוס' : '✅ זמין'}</td>
+            </tr>
+          `;
+          
+          current.setDate(current.getDate() + 1);
+        }
+        
+        html += `
+            </tbody>
+          </table>
+        `;
+        
+        el("cabin_availability_table").innerHTML = html;
+        el("cabin_availability_table").classList.add("visible");
+        currentCabinAvailability = cabinId;
+      } catch (error) {
+        console.error('Error loading availability table:', error);
+        renderSimpleAvailabilityTable(cabinId);
+      }
+    }
+    
+    function renderSimpleAvailabilityTable(cabinId) {
+      const table = el("cabin_availability_table");
+      if (!table) {
+        const newTable = document.createElement('div');
+        newTable.id = 'cabin_availability_table';
+        newTable.className = 'cabin-availability-table';
+        document.body.appendChild(newTable);
+      }
+      
+      const cabin = availableCabins.find(c => (c.cabin_id === cabinId || c.cabin_id === cabinId.replace(/-/g, '')));
+      const cabinName = cabin ? cabin.name : cabinId;
+      
+      el("cabin_availability_table").innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; color: #2196F3;">📅 זמינות: ${cabinName}</h3>
+          <button class="btn-danger" onclick="hideCabinAvailability()" style="padding: 6px 12px;">✕</button>
+        </div>
+        <p>טוען נתוני זמינות...</p>
+      `;
+      el("cabin_availability_table").classList.add("visible");
+    }
+    
+    function hideCabinAvailability() {
+      if (availabilityTableTimer) {
+        clearTimeout(availabilityTableTimer);
+      }
+      
+      setTimeout(() => {
+        const table = el("cabin_availability_table");
+        if (table) {
+          table.classList.remove("visible");
+        }
+        currentCabinAvailability = null;
+      }, 200);
+    }
+    
     function wireInputs() {
-      ["check_in","check_out","adults","kids","area"].forEach(id => {
+      // Date range picker doesn't need event listeners - handled by onclick
+      ["adults","kids","area"].forEach(id => {
         const element = el(id);
         // Use 'change' for select, 'input' for text inputs
         const eventType = element.tagName === "SELECT" ? "change" : "input";
@@ -1385,6 +2359,8 @@
       el("btn_check_availability").addEventListener("click", checkAvailability);
       el("btn_post").addEventListener("click", checkAvailability); // לשמירת תאימות
       el("bookingForm").addEventListener("submit", createBooking);
+      el("btn_create_hold").addEventListener("click", createHold);
+      el("btn_cancel_hold").addEventListener("click", cancelHold);
       el("btn_book_final").addEventListener("click", () => {
         if (selectedCabinId) {
           openBookingModal(selectedCabinId);
@@ -1402,7 +2378,7 @@
       });
       
       // עדכן את ה-JSON preview כשהשדות משתנים
-      ["modal_customer", "modal_phone", "modal_notes"].forEach(id => {
+      ["modal_customer", "modal_phone", "modal_email", "modal_notes"].forEach(id => {
         el(id).addEventListener("input", updateBookingJson);
       });
     }
@@ -1423,6 +2399,163 @@
     // Admin Panel Functions - use API_BASE from main script scope
     const ADMIN_API_BASE = window.API_BASE || 'http://127.0.0.1:8000';
     
+    async function showBookingDetails(bookingId) {
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/bookings/${bookingId}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const booking = await response.json();
+        
+        // Format dates
+        const checkIn = booking.check_in ? new Date(booking.check_in).toLocaleDateString('he-IL') : 'N/A';
+        const checkOut = booking.check_out ? new Date(booking.check_out).toLocaleDateString('he-IL') : 'N/A';
+        const created = booking.created_at ? new Date(booking.created_at).toLocaleString('he-IL') : 'N/A';
+        const updated = booking.updated_at ? new Date(booking.updated_at).toLocaleString('he-IL') : 'N/A';
+        
+        const statusClass = `status-${booking.status || 'pending'}`;
+        const canCancel = booking.status !== 'cancelled';
+        
+        const modal = document.getElementById('bookingDetailModal');
+        const content = document.getElementById('bookingDetailContent');
+        
+        content.innerHTML = `
+          <div style="padding: 20px;">
+            <h2 style="margin-top: 0; color: #667eea;">פרטי הזמנה</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+              <div>
+                <h3 style="color: #333; margin-bottom: 10px;">מידע כללי</h3>
+                <p><strong>מספר הזמנה:</strong> ${bookingId.substring(0, 8)}...</p>
+                <p><strong>סטטוס:</strong> <span class="status-badge ${statusClass}">${booking.status || 'pending'}</span></p>
+                <p><strong>צימר:</strong> ${booking.cabin_name || 'N/A'}</p>
+                <p><strong>אזור:</strong> ${booking.cabin_area || 'N/A'}</p>
+                <p><strong>מחיר כולל:</strong> ${booking.total_price || 0} ILS</p>
+              </div>
+              
+              <div>
+                <h3 style="color: #333; margin-bottom: 10px;">תאריכים</h3>
+                <p><strong>Check-in:</strong> ${checkIn}</p>
+                <p><strong>Check-out:</strong> ${checkOut}</p>
+                <p><strong>מבוגרים:</strong> ${booking.adults || 0}</p>
+                <p><strong>ילדים:</strong> ${booking.kids || 0}</p>
+                <p><strong>נוצר:</strong> ${created}</p>
+                <p><strong>עודכן:</strong> ${updated}</p>
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+              <h3 style="color: #333; margin-bottom: 10px;">פרטי לקוח</h3>
+              <p><strong>שם:</strong> ${booking.customer_name || 'N/A'}</p>
+              <p><strong>אימייל:</strong> ${booking.customer_email || 'N/A'}</p>
+              <p><strong>טלפון:</strong> ${booking.customer_phone || 'N/A'}</p>
+            </div>
+            
+            ${booking.event_id ? `
+            <div style="margin-bottom: 20px;">
+              <h3 style="color: #333; margin-bottom: 10px;">Google Calendar</h3>
+              <p><strong>Event ID:</strong> <small>${booking.event_id}</small></p>
+              ${booking.event_link ? `<p><a href="${booking.event_link}" target="_blank">פתח ביומן</a></p>` : ''}
+            </div>
+            ` : ''}
+            
+            ${booking.payment_intent_id ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px;">
+              <h3 style="color: #856404; margin-bottom: 10px; margin-top: 0;">💳 תשלום</h3>
+              <p><strong>Payment Intent ID:</strong> <small>${booking.payment_intent_id}</small></p>
+              ${booking.client_secret ? `<p><strong>Client Secret:</strong> <code style="font-size: 11px; word-break: break-all;">${booking.client_secret}</code></p>` : ''}
+              <p style="color: #856404; font-size: 14px; margin-bottom: 0;">
+                ⚠️ תשלום נדרש - השתמש ב-Client Secret עם Stripe Checkout
+              </p>
+            </div>
+            ` : ''}
+            
+            ${booking.transactions && booking.transactions.length > 0 ? `
+            <div style="margin-bottom: 20px;">
+              <h3 style="color: #333; margin-bottom: 10px;">תשלומים</h3>
+              <table class="admin-table" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th>סכום</th>
+                    <th>מטבע</th>
+                    <th>סטטוס</th>
+                    <th>שיטת תשלום</th>
+                    <th>תאריך</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${booking.transactions.map(t => `
+                    <tr>
+                      <td>${t.amount || 0}</td>
+                      <td>${t.currency || 'ILS'}</td>
+                      <td><span class="status-badge status-${t.status || 'pending'}">${t.status || 'pending'}</span></td>
+                      <td>${t.payment_method || 'N/A'}</td>
+                      <td><small>${t.created_at ? new Date(t.created_at).toLocaleString('he-IL') : ''}</small></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            ` : ''}
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+              ${canCancel ? `
+                <button class="btn-danger" onclick="cancelBooking('${bookingId}')" style="padding: 10px 20px;">
+                  ביטול הזמנה
+                </button>
+              ` : ''}
+              <button onclick="closeBookingDetailModal()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                סגור
+              </button>
+            </div>
+          </div>
+        `;
+        
+        modal.style.display = 'block';
+      } catch (error) {
+        alert(`שגיאה בטעינת פרטי ההזמנה: ${error.message}`);
+        console.error('Error loading booking details:', error);
+      }
+    }
+    
+    function closeBookingDetailModal() {
+      const modal = document.getElementById('bookingDetailModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    async function cancelBooking(bookingId) {
+      if (!confirm('האם אתה בטוח שברצונך לבטל את ההזמנה? פעולה זו תמחק את האירוע מ-Google Calendar ותעדכן את הזמינות.')) {
+        return;
+      }
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/bookings/${bookingId}/cancel`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Close detail modal
+        closeBookingDetailModal();
+        
+        // Reload bookings list
+        loadBookings();
+        
+        // Reload stats
+        loadStats();
+        
+        alert(`ההזמנה בוטלה בהצלחה!${result.calendar_deleted ? ' האירוע נמחק מ-Google Calendar.' : ' (הערה: לא הצלחנו למחוק את האירוע מ-Google Calendar)'}`);
+      } catch (error) {
+        alert(`שגיאה בביטול ההזמנה: ${error.message}`);
+        console.error('Error cancelling booking:', error);
+      }
+    }
+
     function closeAdminModal() {
       document.getElementById('adminModal').style.display = 'none';
     }
@@ -1442,18 +2575,101 @@
       else if (tab === 'stats') loadStats();
     }
 
+    function showBookingsByStatus(status) {
+      // Switch to bookings tab and filter
+      switchAdminTab('bookings');
+      const filterSelect = document.getElementById('bookingStatusFilter');
+      if (filterSelect) {
+        if (status === 'unpaid') {
+          // For unpaid, we need to filter manually
+          filterSelect.value = 'confirmed'; // Set to confirmed first
+          loadBookings().then(() => {
+            // Then filter to show only unpaid
+            const container = document.getElementById('bookingsList');
+            if (container) {
+              const statsData = window.statsData || {};
+              const unpaidIds = (statsData.unpaidBookings || []).map(b => {
+                return (b.booking_id || b.id || '').toString();
+              });
+              
+              const rows = container.querySelectorAll('tbody tr');
+              rows.forEach(row => {
+                const onclickAttr = row.getAttribute('onclick') || '';
+                const match = onclickAttr.match(/showBookingDetails\(['"]([^'"]+)['"]\)/);
+                const bookingId = match ? match[1] : '';
+                const isUnpaid = unpaidIds.includes(bookingId);
+                row.style.display = isUnpaid ? '' : 'none';
+              });
+              
+              // Update message
+              const visibleCount = Array.from(rows).filter(r => r.style.display !== 'none').length;
+              if (visibleCount === 0 && rows.length > 0) {
+                container.innerHTML = '<p>No unpaid bookings found.</p>';
+              }
+            }
+          });
+        } else if (status === 'cancelled') {
+          filterSelect.value = 'cancelled';
+          loadBookings();
+        } else {
+          filterSelect.value = status;
+          loadBookings();
+        }
+      }
+    }
+    
     async function loadBookings() {
       const status = document.getElementById('bookingStatusFilter')?.value || '';
-      // Try to get API_BASE from main script, fallback to default
       const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
-      const url = `${apiBase}/admin/bookings${status ? `?status=${status}` : ''}`;
+      const container = document.getElementById('bookingsList');
       
       try {
+        // If filter is "hold", load from /admin/holds instead of bookings
+        if (status === 'hold' || status === 'Hold') {
+          const response = await fetch(`${apiBase}/admin/holds`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const holdsData = await response.json();
+          const holds = Array.isArray(holdsData.holds) ? holdsData.holds : (Array.isArray(holdsData) ? holdsData : []);
+          
+          if (holds.length === 0) {
+            container.innerHTML = '<p>No holds found.</p>';
+            return;
+          }
+
+          let html = '<table class="admin-table"><thead><tr>';
+          html += '<th>Hold ID</th><th>Cabin ID</th><th>Customer</th><th>Check-in</th><th>Check-out</th>';
+          html += '<th>Status</th><th>Expires At</th><th>Created</th></tr></thead><tbody>';
+          
+          holds.forEach(hold => {
+            const expiresAt = hold.expires_at ? new Date(hold.expires_at) : null;
+            const createdAt = hold.created_at ? new Date(hold.created_at) : null;
+            const now = new Date();
+            const isExpired = expiresAt && expiresAt < now;
+            const minutesLeft = expiresAt && !isExpired ? Math.max(0, Math.floor((expiresAt - now) / 60000)) : 0;
+            
+            html += `<tr>
+              <td><small>${(hold.hold_id || '').substring(0, 8)}...</small></td>
+              <td>${hold.cabin_id || 'N/A'}</td>
+              <td>${hold.customer_name || 'N/A'}<br><small>${hold.customer_id ? (hold.customer_id.length > 8 ? hold.customer_id.substring(0, 8) + '...' : hold.customer_id) : ''}</small></td>
+              <td>${hold.check_in || ''}</td>
+              <td>${hold.check_out || ''}</td>
+              <td><span class="status-badge ${isExpired ? 'status-expired' : 'status-hold'}">${isExpired ? 'Expired' : `Hold (${minutesLeft}m left)`}</span></td>
+              <td><small>${expiresAt && !isNaN(expiresAt.getTime()) ? expiresAt.toLocaleString('he-IL') : 'N/A'}</small></td>
+              <td><small>${createdAt && !isNaN(createdAt.getTime()) ? createdAt.toLocaleString('he-IL') : 'N/A'}</small></td>
+            </tr>`;
+          });
+          
+          html += '</tbody></table>';
+          container.innerHTML = html;
+          return;
+        }
+        
+        // Otherwise, load regular bookings
+        const url = `${apiBase}/admin/bookings${status ? `?status=${status}` : ''}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bookings = await response.json();
         
-        const container = document.getElementById('bookingsList');
         if (bookings.length === 0) {
           container.innerHTML = '<p>No bookings found.</p>';
           return;
@@ -1465,8 +2681,9 @@
         
         bookings.forEach(booking => {
           const statusClass = `status-${booking.status || 'pending'}`;
-          html += `<tr>
-            <td>${(booking.booking_id || booking.id || '').substring(0, 8)}...</td>
+          const bookingId = booking.booking_id || booking.id || '';
+          html += `<tr style="cursor: pointer;" onclick="showBookingDetails('${bookingId}')" title="לחץ לפרטים">
+            <td>${bookingId.substring(0, 8)}...</td>
             <td>${booking.cabin_name || 'N/A'}</td>
             <td>${booking.customer_name || 'N/A'}<br><small>${booking.customer_email || ''}</small></td>
             <td>${booking.check_in || ''}</td>
@@ -1481,10 +2698,9 @@
         html += '</tbody></table>';
         container.innerHTML = html;
       } catch (error) {
-        const container = document.getElementById('bookingsList');
         if (container) {
           container.innerHTML = `<p class="err">Error: ${error.message}</p>`;
-          console.error('Error loading bookings:', error);
+          console.error('Error loading bookings/holds:', error);
         }
       }
     }
@@ -1534,9 +2750,10 @@
     async function loadStats() {
       try {
         const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
-        const [bookingsRes, auditRes] = await Promise.all([
+        const [bookingsRes, auditRes, holdsRes] = await Promise.all([
           fetch(`${apiBase}/admin/bookings`),
-          fetch(`${apiBase}/admin/audit`)
+          fetch(`${apiBase}/admin/audit`),
+          fetch(`${apiBase}/admin/holds`).catch(() => ({ok: false, json: () => ({holds: [], count: 0})}))
         ]);
         
         if (!bookingsRes.ok) throw new Error(`HTTP ${bookingsRes.status}`);
@@ -1544,15 +2761,31 @@
         
         const bookingsData = await bookingsRes.json();
         const auditData = await auditRes.json();
+        const holdsData = holdsRes.ok ? await holdsRes.json() : {holds: [], count: 0};
         
         // Ensure bookings and auditLogs are arrays
         const bookings = Array.isArray(bookingsData) ? bookingsData : [];
         const auditLogs = Array.isArray(auditData) ? auditData : [];
+        const holds = Array.isArray(holdsData.holds) ? holdsData.holds : [];
+        
+        // Calculate unpaid bookings (confirmed but no completed transaction)
+        const unpaidBookings = bookings.filter(b => {
+          if (b.status !== 'confirmed') return false;
+          // Check if has completed transaction
+          const transactions = b.transactions || [];
+          const hasCompletedTransaction = transactions.some(t => t && t.status === 'completed');
+          const hasPrice = parseFloat(b.total_price || 0) > 0;
+          return hasPrice && !hasCompletedTransaction;
+        });
+        
+        const cancelledBookings = bookings.filter(b => b.status === 'cancelled');
         
         const stats = {
           totalBookings: bookings.length,
           confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
-          holdBookings: bookings.filter(b => b.status === 'hold').length,
+          holdBookings: holds.length, // Use actual holds count, not bookings with status='hold'
+          unpaidBookings: unpaidBookings.length,
+          cancelledBookings: cancelledBookings.length,
           totalRevenue: bookings.reduce((sum, b) => {
             const price = parseFloat(b.total_price);
             return sum + (isNaN(price) || !price ? 0 : price);
@@ -1561,19 +2794,33 @@
           availabilitySearches: auditLogs.filter(a => a.table_name === 'availability_search').length
         };
         
+        // Store for click handlers
+        window.statsData = {
+          unpaidBookings: unpaidBookings,
+          cancelledBookings: cancelledBookings
+        };
+        
         const html = `
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-            <div class="card">
+            <div class="card" style="cursor: pointer;" onclick="showBookingsByStatus('all')" title="לחץ לראות כל ההזמנות">
               <h3>Total Bookings</h3>
               <p style="font-size: 32px; font-weight: bold; color: #667eea;">${stats.totalBookings}</p>
             </div>
-            <div class="card">
+            <div class="card" style="cursor: pointer;" onclick="showBookingsByStatus('confirmed')" title="לחץ לראות הזמנות מאושרות">
               <h3>Confirmed</h3>
               <p style="font-size: 32px; font-weight: bold; color: #28a745;">${stats.confirmedBookings}</p>
             </div>
-            <div class="card">
+            <div class="card" style="cursor: pointer;" onclick="showBookingsByStatus('hold')" title="לחץ לראות הזמנות בהמתנה">
               <h3>On Hold</h3>
               <p style="font-size: 32px; font-weight: bold; color: #ffc107;">${stats.holdBookings}</p>
+            </div>
+            <div class="card" style="cursor: pointer;" onclick="showBookingsByStatus('unpaid')" title="לחץ לראות הזמנות שלא שולמו">
+              <h3>Unpaid</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #dc3545;">${stats.unpaidBookings}</p>
+            </div>
+            <div class="card" style="cursor: pointer;" onclick="showBookingsByStatus('cancelled')" title="לחץ לראות הזמנות שבוטלו">
+              <h3>Cancelled</h3>
+              <p style="font-size: 32px; font-weight: bold; color: #6c757d;">${stats.cancelledBookings}</p>
             </div>
             <div class="card">
               <h3>Total Revenue</h3>
@@ -1732,9 +2979,32 @@
     }
     .status-confirmed { background: #d4edda; color: #155724; }
     .status-hold { background: #fff3cd; color: #856404; }
+    .status-expired { background: #f8d7da; color: #721c24; }
     .status-cancelled { background: #f8d7da; color: #721c24; }
     .status-pending { background: #d1ecf1; color: #0c5460; }
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-danger:hover {
+      background: #c82333;
+    }
   </style>
+
+  <!-- Booking Detail Modal -->
+  <div id="bookingDetailModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; width: 95%;">
+      <span class="close" onclick="closeBookingDetailModal()">&times;</span>
+      <div id="bookingDetailContent">
+        <p>טוען...</p>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

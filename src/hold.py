@@ -30,6 +30,9 @@ class HoldManager:
     
     def __init__(self):
         """Initialize Redis connection"""
+        # In-memory fallback storage when Redis is unavailable
+        self._memory_holds: Dict[str, Dict[str, Any]] = {}
+        
         try:
             self.redis_client = redis.Redis(
                 host=REDIS_HOST,
@@ -43,7 +46,7 @@ class HoldManager:
             self.redis_client.ping()
         except (redis.ConnectionError, redis.TimeoutError) as e:
             print(f"Warning: Could not connect to Redis: {e}")
-            print("Hold functionality will be disabled. Install Redis to enable.")
+            print("Hold functionality will use in-memory storage (not persistent). Install Redis to enable.")
             self.redis_client = None
     
     def _is_available(self) -> bool:
@@ -80,21 +83,43 @@ class HoldManager:
             ValueError: If hold already exists or Redis unavailable
         """
         if not self._is_available():
-            # If Redis unavailable, return a "virtual" hold
-            # This allows the system to work without Redis, but without protection
+            # If Redis unavailable, use in-memory storage
+            hold_key = self._generate_hold_key(cabin_id, check_in, check_out)
+            
+            # Check if hold already exists in memory
+            if hold_key in self._memory_holds:
+                existing_data = self._memory_holds[hold_key]
+                # Check if expired
+                expires_at_dt = datetime.fromisoformat(existing_data.get('expires_at'))
+                if datetime.now() < expires_at_dt:
+                    raise ValueError(
+                        f"Cabin {cabin_id} is already on hold until {existing_data.get('expires_at')}"
+                    )
+                else:
+                    # Expired, remove it
+                    del self._memory_holds[hold_key]
+            
             hold_id = str(uuid.uuid4())
             expires_at = (datetime.now() + timedelta(seconds=HOLD_DURATION)).isoformat()
-            return {
+            
+            hold_data = {
                 "hold_id": hold_id,
                 "cabin_id": cabin_id,
                 "check_in": check_in,
                 "check_out": check_out,
                 "customer_name": customer_name,
                 "customer_id": customer_id,
+                "created_at": datetime.now().isoformat(),
                 "expires_at": expires_at,
-                "status": "created",
+                "status": "active",
                 "warning": "Redis unavailable - hold not protected"
             }
+            
+            # Store in memory
+            self._memory_holds[hold_key] = hold_data
+            self._memory_holds[f"hold:by_id:{hold_id}"] = hold_key
+            
+            return hold_data
         
         hold_key = self._generate_hold_key(cabin_id, check_in, check_out)
         
@@ -146,7 +171,26 @@ class HoldManager:
             Hold data or None if not found
         """
         if not self._is_available():
-            return None
+            # Check in-memory storage
+            hold_key_ref = self._memory_holds.get(f"hold:by_id:{hold_id}")
+            if not hold_key_ref:
+                return None
+            
+            hold_data = self._memory_holds.get(hold_key_ref)
+            if not hold_data:
+                return None
+            
+            # Check if expired
+            expires_at_dt = datetime.fromisoformat(hold_data.get('expires_at'))
+            if datetime.now() >= expires_at_dt:
+                # Expired, clean up
+                if hold_key_ref in self._memory_holds:
+                    del self._memory_holds[hold_key_ref]
+                if f"hold:by_id:{hold_id}" in self._memory_holds:
+                    del self._memory_holds[f"hold:by_id:{hold_id}"]
+                return None
+            
+            return hold_data
         
         hold_key = self.redis_client.get(f"hold:by_id:{hold_id}")
         if not hold_key:
@@ -179,7 +223,17 @@ class HoldManager:
             True if released, False if not found
         """
         if not self._is_available():
-            return False
+            # Check in-memory storage
+            hold_key_ref = self._memory_holds.get(f"hold:by_id:{hold_id}")
+            if not hold_key_ref:
+                return False
+            
+            # Delete both keys from memory
+            if hold_key_ref in self._memory_holds:
+                del self._memory_holds[hold_key_ref]
+            if f"hold:by_id:{hold_id}" in self._memory_holds:
+                del self._memory_holds[f"hold:by_id:{hold_id}"]
+            return True
         
         hold_key = self.redis_client.get(f"hold:by_id:{hold_id}")
         if not hold_key:
@@ -258,19 +312,49 @@ class HoldManager:
         Returns:
             List of hold data dictionaries
         """
-        if not self._is_available():
-            return []
-        
         holds = []
-        for key in self.redis_client.scan_iter(match="hold:*:*:*"):
-            if ":by_id:" in key:
-                continue
-            
-            hold_data = self.redis_client.get(key)
-            if hold_data:
-                holds.append(json.loads(hold_data))
         
-        return holds
+        if not self._is_available():
+            # In-memory holds - iterate through _memory_holds
+            now = datetime.now()
+            for key, hold_data in list(self._memory_holds.items()):
+                # Skip the hold:by_id: keys
+                if key.startswith("hold:by_id:"):
+                    continue
+                
+                # Check if expired
+                expires_at_dt = datetime.fromisoformat(hold_data.get('expires_at'))
+                if datetime.now() < expires_at_dt:
+                    holds.append(hold_data)
+                else:
+                    # Expired, clean up
+                    hold_id = hold_data.get('hold_id')
+                    if hold_id and f"hold:by_id:{hold_id}" in self._memory_holds:
+                        del self._memory_holds[f"hold:by_id:{hold_id}"]
+                    del self._memory_holds[key]
+            
+            return holds
+        
+        # With Redis, scan for all hold keys
+        try:
+            # Get all hold keys (hold:cabin_id:check_in:check_out)
+            keys = list(self.redis_client.scan_iter(match="hold:*:*:*"))
+            # Filter out hold:by_id: keys
+            hold_keys = [k for k in keys if not k.startswith("hold:by_id:")]
+            
+            for hold_key in hold_keys:
+                hold_data_str = self.redis_client.get(hold_key)
+                if hold_data_str:
+                    hold_data = json.loads(hold_data_str)
+                    # Check if expired
+                    expires_at_dt = datetime.fromisoformat(hold_data.get('expires_at'))
+                    if datetime.now() < expires_at_dt:
+                        holds.append(hold_data)
+            
+            return holds
+        except Exception as e:
+            print(f"Error listing holds from Redis: {e}")
+            return []
 
 
 # Global instance

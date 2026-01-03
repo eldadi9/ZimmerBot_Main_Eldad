@@ -71,7 +71,7 @@ def read_cabins_from_db() -> List[Dict[str, Any]]:
                         weekend_price,
                         images_urls,
                         calendar_id,
-                        COALESCE(cabin_id_string, id::text) as cabin_id_string
+                        cabin_id_string
                     FROM cabins
                     ORDER BY name
                 """)
@@ -287,21 +287,48 @@ def get_cabin_by_id(cabin_id: str) -> Optional[Dict[str, Any]]:
                 import uuid as uuid_lib
                 uuid_lib.UUID(cabin_id)  # Validate UUID format
                 # It's a valid UUID
+                # Check if cabin_id_string column exists
                 cursor.execute("""
-                    SELECT 
-                        id::text as cabin_id,
-                        name,
-                        area,
-                        max_adults,
-                        max_kids,
-                        features,
-                        base_price_night,
-                        weekend_price,
-                        images_urls,
-                        calendar_id
-                    FROM cabins
-                    WHERE id = %s::uuid
-                """, (cabin_id,))
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'cabins' AND column_name = 'cabin_id_string'
+                """)
+                has_cabin_id_string = cursor.fetchone() is not None
+                
+                if has_cabin_id_string:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            COALESCE(cabin_id_string, id::text) as cabin_id_string
+                        FROM cabins
+                        WHERE id = %s::uuid
+                    """, (cabin_id,))
+                else:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            id::text as cabin_id_string
+                        FROM cabins
+                        WHERE id = %s::uuid
+                    """, (cabin_id,))
             except (ValueError, AttributeError):
                 # Not a UUID, try to find by calendar_id or name
                 cursor.execute("""
@@ -419,15 +446,19 @@ def save_audit_log(
                 if user_id:
                     payload["user_id"] = user_id
                 
+                # Generate UUID for audit log entry
+                audit_uuid = str(uuid_lib.uuid4())
+                
                 cursor.execute("""
                     INSERT INTO audit_log (
-                        entity_type, entity_id, action, payload
+                        id, entity_type, entity_id, action, payload
                     )
                     VALUES (
-                        %s, %s, %s, %s::jsonb
+                        %s::uuid, %s, %s, %s, %s::jsonb
                     )
                     RETURNING id::text
                 """, (
+                    audit_uuid,
                     table_name,
                     record_id,
                     action,
@@ -471,22 +502,166 @@ def save_transaction(
             except (ValueError, AttributeError):
                 return None
             
+            # Check which columns exist in transactions table
             cursor.execute("""
-                INSERT INTO transactions (
-                    booking_id, payment_id, amount, currency, status, payment_method
-                )
-                VALUES (
-                    %s::uuid, %s, %s, %s, %s, %s
-                )
-                RETURNING id::text
-            """, (
-                booking_uuid,
-                payment_id,
-                amount,
-                currency,
-                status,
-                payment_method
-            ))
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'transactions'
+            """)
+            columns = {row[0] for row in cursor.fetchall()}
+            
+            # Generate UUID for transaction id
+            transaction_uuid = str(uuid_lib.uuid4())
+            
+            # Check if id column has default (UUID generation)
+            cursor.execute("""
+                SELECT column_default 
+                FROM information_schema.columns 
+                WHERE table_name = 'transactions' AND column_name = 'id'
+            """)
+            id_default = cursor.fetchone()
+            has_uuid_default = id_default and id_default[0] and 'uuid_generate' in str(id_default[0])
+            
+            # Build query based on available columns
+            if 'currency' in columns and 'payment_method' in columns:
+                if has_uuid_default:
+                    # Let database generate UUID
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            booking_id, payment_id, amount, currency, status, payment_method
+                        )
+                        VALUES (
+                            %s::uuid, %s, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        currency,
+                        status,
+                        payment_method
+                    ))
+                else:
+                    # Explicitly set UUID
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            id, booking_id, payment_id, amount, currency, status, payment_method
+                        )
+                        VALUES (
+                            %s::uuid, %s::uuid, %s, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        transaction_uuid,
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        currency,
+                        status,
+                        payment_method
+                    ))
+            elif 'currency' in columns:
+                if has_uuid_default:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            booking_id, payment_id, amount, currency, status
+                        )
+                        VALUES (
+                            %s::uuid, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        currency,
+                        status
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            id, booking_id, payment_id, amount, currency, status
+                        )
+                        VALUES (
+                            %s::uuid, %s::uuid, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        transaction_uuid,
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        currency,
+                        status
+                    ))
+            elif 'payment_method' in columns:
+                if has_uuid_default:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            booking_id, payment_id, amount, status, payment_method
+                        )
+                        VALUES (
+                            %s::uuid, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        status,
+                        payment_method
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            id, booking_id, payment_id, amount, status, payment_method
+                        )
+                        VALUES (
+                            %s::uuid, %s::uuid, %s, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        transaction_uuid,
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        status,
+                        payment_method
+                    ))
+            else:
+                # Minimal schema - only required fields
+                if has_uuid_default:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            booking_id, payment_id, amount, status
+                        )
+                        VALUES (
+                            %s::uuid, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        status
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT INTO transactions (
+                            id, booking_id, payment_id, amount, status
+                        )
+                        VALUES (
+                            %s::uuid, %s::uuid, %s, %s, %s
+                        )
+                        RETURNING id::text
+                    """, (
+                        transaction_uuid,
+                        booking_uuid,
+                        payment_id,
+                        amount,
+                        status
+                    ))
             
             transaction_id = cursor.fetchone()[0]
             conn.commit()
@@ -556,4 +731,54 @@ def save_quote(
     except Exception as e:
         print(f"Error saving quote: {e}")
         return None
+
+
+def update_transaction_status(
+    transaction_id: str,
+    status: str,
+    payment_method: Optional[str] = None
+) -> bool:
+    """
+    Update transaction status
+    
+    Args:
+        transaction_id: Transaction UUID
+        status: New status (pending, completed, failed, refunded)
+        payment_method: Payment method if available
+    
+    Returns:
+        True if updated successfully
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check which columns exist
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'transactions'
+        """)
+        columns = {row[0] for row in cursor.fetchall()}
+        
+        if 'payment_method' in columns and 'updated_at' in columns:
+            cursor.execute("""
+                UPDATE transactions
+                SET status = %s, payment_method = %s, updated_at = NOW()
+                WHERE id = %s::uuid
+            """, (status, payment_method, transaction_id))
+        elif 'payment_method' in columns:
+            cursor.execute("""
+                UPDATE transactions
+                SET status = %s, payment_method = %s
+                WHERE id = %s::uuid
+            """, (status, payment_method, transaction_id))
+        else:
+            cursor.execute("""
+                UPDATE transactions
+                SET status = %s
+                WHERE id = %s::uuid
+            """, (status, transaction_id))
+        
+        conn.commit()
+        return cursor.rowcount > 0
 

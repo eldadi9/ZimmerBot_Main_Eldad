@@ -198,6 +198,25 @@ def create_calendar_event(
     created = service.events().insert(calendarId=calendar_id, body=body).execute()
     return created
 
+
+def delete_calendar_event(
+    service,
+    calendar_id: str,
+    event_id: str
+) -> bool:
+    """
+    מוחק אירוע מיומן Google Calendar.
+    
+    Returns:
+        True if deleted successfully, False otherwise
+    """
+    try:
+        service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+        return True
+    except Exception as e:
+        print(f"Error deleting calendar event {event_id}: {e}")
+        return False
+
 from datetime import datetime, timedelta, timezone
 
 

@@ -30,3 +30,6 @@ uvicorn[standard]==0.32.0
 pydantic==2.9.2
 # Redis (for Hold mechanism - Stage 4)
 redis==5.0.1
+# Payment Gateway (Stage 5)
+stripe==11.1.0
+email-validator==2.1.0
