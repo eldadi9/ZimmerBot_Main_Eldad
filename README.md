@@ -1,6 +1,6 @@
 # 🏡 ZimmerBot - תיעוד מלא ותהליך פיתוח
 
-> 📚 **לתיעוד המלא והמפורט:** [README_FULL.md](./docs/README_FULL.md)   [BACKLOG.md](./ZimmerBot_Main_Eldad/BACKLOG.md)
+> 📚 **לתיעוד המלא והמפורט:** [README_FULL.md](./docs/README_FULL.md)   [BACKLOG.md](./BACKLOG.md)
 
 <div align="center">
 
