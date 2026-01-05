@@ -1,0 +1,579 @@
+[
+  {
+    "endpoint": "/autocomplete",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/autocomplete/?q=zimmer",
+      "status_code": 403,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:02 GMT",
+        "Content-Type": "text/html; charset=iso-8859-1",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=3oyywscg7CTJj2fC1RsHRk76q4dtXgcjrQ4e4K1o0XvLvW6aN848PU0QOz9uo7SbOEsORMrqxQUD%2Bv14uZ5p5fR8F0ffGvIa7N1ZJRRj5dcUqrTnirbrYJA%3D\"}]}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8663f17cdc3562-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=iso-8859-1",
+      "size": 155,
+      "text_preview": "\u001bÆ\u0000\u0000Ä¢mõ+ià-Ç}1«¨.:9p8ù\u000f\u001eµ,°\u0004\u0003Á°Es¬$-§û±oV×åë[c÷:p{/Nû%dEÓöë×F2DÚª®iëò 9Ï&s\u0015â3bë\u00166eãÄç\u0017h±\u0000ÎX#cÒEÆDP5ù\u001d¼²\u00181òÝY\u0002x\n\u001cÅ-\u001a¿-»ÆõUÒªù\u001aÒ\"Î³\u0000",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/orders_search",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/orders_search?q=zimmer",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:03 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=PKfWHxgIERLdPMyUVRofT5r8zgCRNnjqt6ui0Y2OaNOxdJtKEzAh7MoMbZg9kDZMg8ycawkMajOD4egF0t6LL2SEsTqr5l%2FodOwyJ0mZl2lT99q8uJ4K9Rc%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=u3eiain9htfspt3m4fe3cfom78; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8663f6fc2c25c7-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20622,
+      "text_preview": "[�]13(l\u001c\u0000\u0000���)\"5�\u0007@u&Ƹ�?~���\u0017�q\u0013\u001f�<����~�\u00066��rl�m`�0\u0001�`'�\u0013�c&;>�\u0002P\u0000K*�`T�\"�p��l16۴<<w4t��˿Z־\u0017��W���1�D�},\u0012�<\"�t��̈��qF�b��\u0015\t]\u0010�\u0007��� �Nϻ0A�A\u000e\u0017�\u0002���sV54�_.�\u0013D'$/�Xm���\u001a�\u0001�צ���m���}Ss\u001d�8Ƣ�v��[J+�!���ն�����g��\u0001P�\u0001X\fB\u0001\b(f\u0000\u0014\u0000�{�{���\u001f\u00009���\u0000�\u000e�D3(,�M\u0010�\f�,@J\u001bRh\u001a��s��E��#�a�j Gn�Ω�E��U�ܢ�c���\u0017\u0004DDԭ��1����V\u0013\u0015\u001c\u000b\u000e��?���}��\"\"\u001a<ڟ/�|5�I��8\u001d\f��CB�t&c���ۀQ\u0003a ;�q\u0002�F�d*K6��ǄhJ�I�w[%B4��\u0016#�988��(u=zR\u0012���/$�\f�L��\u0000M����<\u0019�N��a�\u001d\u0004=?p�]��.\u0002G>�\u0005��ڨ3u\u0001��\u0002u�N�\u001bu\u0001����A]�-@�\tS\u001b�\u001e,P'�L�Q\u001bu\u0001�T�Uku\u0002�Dm�Z]�\u000bP'�B]��\u0001ш�'��%\tQ\u0019Y0(\u0014",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/search",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/search?query=zimmer",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:04 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=bbIEe7rE7yQYb%2BEMVQBDokOpSaCVtzJNjoLF05DqAZpiOgz65NnHm9no%2Bwc1uAHKFznW7D8KOtWVL4H%2BA9kWxuCdy2ILkf1QMmcsRSvChdoq%2F1xbceUd5Ns%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=3ekrea3f8s6begnirs5fifh5v0; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8663fd0a9b997f-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20831,
+      "text_preview": "[�]13(l\u001c\u0000\u0000���)\"5�\u0007@u&Ƹ�?~���\u0017�q\u0013\u001f�<��������d�)\u0002�H�V�%�\u0010�`\u00120I��t�����JQU�����\rF6�\u0003�h�����\u001b�Ѱ�g0z~�~\u001f\u0003I4��\u0002��#pNw�� p�3*\u0015늸$������\n�ݒ��Ʉ\t�\r��\u0010�����:�2=�&��$�c;�c\u001f\u001b*<JN\u0002\u001d��Z���^������\u000e\t\u000e������[%�!��������^���)f\u0000\u0014\u0003�� \u0014��b\u0010\n��{�{���\u0000\u0011\u0004�\u0000\"� �\u0018�&\u0010�d(8\u000eH�#�RA��nv�U$�9w��E��\u000bp\u0018�6p�J�T\u0015.]�t�q��c,���\u0002\"!�]��1����j�@�\u0005\u000f���ab��M�QD��p��L\u0013(ߑ�I\u001c�}H��חC�����%�p\t���\u0018\u0001�c}<�%�{�\u0013\"4%ɤ竭\u0012\u0011�JY���\u001c\u001e\u001e�`��\u001e?.��Q��\u0012DFh&s��zɿ}_C>\u0019�Σ\u001f� �\u0007]?p{��s]\u0017�ß�\u0001��ڨsu\u0001��\u0002u�N�ku\u0001������T[\b�.�6�\u001dX�Nչz�6�\u0002ԙz���\u0014ԩڨ��R\u0017�NՅ�TW\r�\u0011�gT�D��\f\r\f��eM",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/cabins",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/cabins",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:05 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=CPHOl9mDqiX%2Bg7DK1wR4sG3suwr6%2Bfmy1I9VPO7tiHCTa6ON1V4pMG1v7au51B6h1Ex1A6V%2FEbZzgDfR9%2FPtO0FbbcW4bJnN6p68nZAPBlNO%2BjW0kDKVZLg%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=r2nkkrred1mmd1pvbpko7gnkph; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b866403486d14b7-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20675,
+      "text_preview": "[�f13h�j�\u001fN\u0011�I=\u0000�31�\r���Ͽ�\b���X����L��5�Y]�c���L�3�\fv\u00129����\u000f~\u0011(�%\u0001(\u0004U�H)�i��l16۴b뻣��e��w�\u0016���|վ\u0018H���Z\bX^�}����E��8�Ã!\u001eI�\u0007\u0001.�8^�h��w~\u0015&�\u0017�`\u0018˂����,-ӏR\u0004.�8�\\)u��x���L\u0011O�v\u001a�v��Y�[���}Ss\u001d�8�*�~��)�J�SR�|�=.�{�{���\u0001P\f\u0000\u0016�P\u0000\u0002�A(\u0000������?\u001f�8���\u0000�� �\u0018�&\u0010�| �y\u0018�\u0011\u0014�Y8�\r���HnΝ;�h�}\u0002\u000e�\fg��n��E�rQnUn�M��X��)\u0005DB��l�c�����ā�\u000b\u001e6=\u001b��7���f�UD�`���1�So��%�H\u0004��gr���\u000e\"\b%T���\b�\u001e��*�W=& S�Lz��J\u0019��R�\u001c�����\u0005F���ォ\u001f�.�T@f*5������u��!��<�U\f�~�뵝���\u001c�!`��e���\u0006��\u0012��\tx�'�\u0016/\u0001��#^\u0000^�\u0016B�\u0019�\r~\u0000\u0013�\u0004��-n�\u0012�\u0014��\u001aO\u0000Op�k��K�\u0013��+�n\u0010�h<��\u0016,",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/zimmerim",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/zimmerim",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:06 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=nwu5EHFevrIFXhhSNEVvksouL9m9v%2Fw61lQTTvwdKLevpQ3GqHT0POgwa5G%2BTdHJRzN4%2ByihbevL74kHiCl3cOjIxSfNYJ7t%2FyI3RURZ%2BAy7jsOKJUG7kNc%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=poo331g2p51lkhv442en0etsne; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86640958db1683-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20575,
+      "text_preview": "[`d1#Y���T���\u0003�:\u0013c��\u001f��������\u0010븞���W嫁��\u001e�\u0006�\f�\t�\u0001�c'�\u0013;��|\u001d\u001f�\u0010\u0018�#\r00fH�RX��%��Vl=o��_�U9�+�����e?\u0016�ѭ�^*�삳O��\\c�?�̗�\u0001�A�K�)\rF./����!�p��\u00077\u0018Ʋ����e\u0016C\u0012���\u0006Vm`�\u0006�0�|�N�\u001a�\u0011b\u000f\u0018\nF��H����Iz��oj:�q�Ulc\u0007��*�\u000e!��Ew�}�x�\u00143\u0000�\u0019�� \u0014��b\u0010\nP�{�{�ϟ\u000f�\u0018B�j\u0000����\rr\u0013\bJ{(�y@�\u001c��\nj�\u0012w�\\��\u00147�nKw�]�\u000b�0�\u001c�LuV��M�ڢt[�1��J\u0001�\u0010�.[�\u0018�w�s5q�₇M��(�M�y�Yu\u0015\u0011/\u0018�/c���.�]\tS\u001e!�v��\n;{\u0013�\u000e�H��L\u000em��\u001a����}}���>�ʒͽ�\bMI2��J�D��R�b�8���6\u0018%�+�%�?��l��\b�dn�Q/���\u001b�'C\\�y�\u0018����\u0007n/�{��\"p���U\u001bu���\u0019X�.ԩz��A]�\u000f�\nԍ�B�w0�Q��\u0002u�.�\u001b�Qנ��[�V��N�F�խ�\u0006u��Ս�m\u0010�h",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/v1/search",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/v1/search?query=%D7%A6%D7%99%D7%9E%D7%A8",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:07 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=KQInsuRR7DEeVxa7bWGYDaRSi9rYWAMyTjaszNcKu67ShMeLc263VlpjcE0dYBSOsKT16MokugVI%2FcPXsLEyF%2Fq3UjsgsuXkiddhTuncyO1J2UFNuwikhXs%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=0skjr4s310u782ml8g38e6qonr; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86640f3f739b09-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20597,
+      "text_preview": "[\u0017_13h�j�\u001fN\u0011�I=\u0000�31�\r���Ͽ�\b���X����L��5�Y]�c��\u0006f�3�\fN\u001c9�������\u0017�\u0002XR\u0001���\u0014)�=-V�-�f[Vl}w4���ղ�o�j��r��a�*��`\u0018]�KU��1�\u0010�N[�$��\u0006Z�G��\u000fɓ���\u001b�\r��,(x��i��2���\u0005�����>�=a\u0004�\u0014��,[Z[/˘�7��d\u001c��H�r)s>]\u0007�1&�s�{�����\u00043\u0000�\u0019���\u0004\u0000�``\u0002���~����\u0001�!H�\u000e��\u0000�*\u0010���\u0015��\u0007HT\u001d��8�*�$���B\u0005��^@fH9�,�\u0014mvQ�$�PQ�˔�J\u0003=Ʋ�O) \u0012\"�e�\u001fC�.�&\u000eT\\���\u0018��?�6��\u0007\"*\f��d�\n��,��1!\t{\u000f\u0011c���,��\u0005�Q\u0017#`|�Og�bs�� B3�Lz��j\u0011����\u0018;����\rF���iE��?� 2BsYXC�K���\n�t��&�~\u0006�p\u0018���\u001d���u]\u0004\u000e~\u001b�?j���\u0015<\u0001\u000bԹ:Q��\u0015�\u000b�^]��Vg\u0010�Lm�;�@��s�Zm�\u0015�S�Fm�\t�\u0013�U\u001bu��@��+u�n\u001aD#\u001aO��\u0015�P\u0019�\u001b\u0018",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/v1/cabins",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/v1/cabins",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:08 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=GrErXWHxYEbJXBOj51oJyZh%2BVdxkjR0yDeclNLcakpJ2zvKPCTfSwDgjI8BwrpP9xw1SQpX7R0j3HArUz6RKjWCBTGywfOn4Y8hMpbTEfkBi0FUXVgJ%2BXz0%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=rprj7qrsgkep92u7ju2lfearum; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664170f7b3562-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20486,
+      "text_preview": "[W^1#Y���T���\u0003�:\u0013c��\u001f��������\u0010븞���T�[\u0003��u96�o\f#g�\u0019��N,�\u0019\u001d\u001f�\"P\u0000K*�\u0010T�\"����J���lˊ����Z��-VmU�Vo��*b�\u0010��\u0006�#\"3\"�\u0002�8\u000f\u001aD\u0016I�\u0000\u0007(J}>��5s�q=?\u00007\u0018Ʋ���/��54��~���3���%L��R4��X!\u0014`\u0019X}�R�e\\fҺi�����C\u001c�X���\u001d�R�\u0004:dzC.�+�������O1\u0003�\u0018\u0000,\u0006�\u0000\u0004\u0016�P�Z������\u0003\bC��\u0006\u0010�\f�|@n\u0002Ai\u000f��\f�<gAJ�,6s\u001d%��e\u0004�9W��.Zw�\r�V\u00039r��\\��]T[�tU�)��X��)\u0005DB��l�c�����ā�\u000b\u001e6=\u001b��7���f��@D����\f\u0015\u0003w'�ۋ�|�\u0010©\r�����6�\fB0P�k!��~���Ő7��*\u0017#`b�Of�bs�zD�f$��|��\"F3)\u001b1r���}\u001b�\u0012��'\u0015�?��L��\u0018�ea\rP/���K(�#�4y�\"\f�A��\u0003�\u001f�}�u\u00118��eP���:U��\u0014,P��H�U���ՙ�\u0000u�N ���ڪ\u000f`�:R��ڪKP��ڨ#",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/cabins/297",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/cabins/297",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:09 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=fpVNQW1n%2BaACJSEYBU%2FpPnYYdqr8tmp0Jx5a58GYSNg1Eg3ecCAoy8wgz3wz%2FyHtGrSkn%2F4MMmA9StYMoa7jHUcf%2FSwvd7bmlw8HfcOAjXfljeiZEmj7Rk0%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=1jubuqol6a15i7kp0efkhkjjmi; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86641d3d1714b7-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20605,
+      "text_preview": "[\u0010`13h�j�\u001fN\u0011�I=\u0000�31�\r���Ͽ�\b���X����L��5�Y]�b���L�3�\fv\u00129���8>�E�\u0000�T@���$���J���lӊ����Z��-Vm��Z\u0006.��\u001e}\u0010��\u0001��s\u0002�5�(\u0014�\u0016�$�\u0005\u0001,�96t�����9^\u0000n0�eA�{��j��\u0016��K�\r��!��LN�?��\u0017������7�R�⌍�*7�r.�\u001aP�� {��\u001f���`\u0006@�\u0000\u0018\fL@,\u0010\fL\u0000r����===0C��\u001d`�:`-�sXp�\nK�\u000fHV-�T�w2�dRdI���6T�*k\u00022#���*�6�U�\u0014*T�(��X��)\u0005DB��l�c�����ā�\u000b\u001e6=\u001b��7���f��@D���Z�i�ד|7Ji2첀�&���Zv!\b�P���\b�\u0018飉,�ܫ.\tф$��/�R�h\"e%\u0006�3��m0J\\\u0017�\n\"T��\u0004�!����^�o�א�\u0007������\u000fz���r���u]\u0017�ß\u001f\u0005��ڨSu\u0001O�\u0002u���{u\u0001�L}V�.�\u0016B=��F}\u0002\u000bԱ:U��F]�:Q\u001f�Z\u001d�:V\u001b�VW�\u0002Ա�P��A4��J\\�\u0010�����7��Im�'\u00032�A",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/zimmerim/297",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/zimmerim/297",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:10 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=ivGnFptrTjIz3tqapFgaj6v%2B4OMA10JaEOPQBRHhR%2BXX0Ht9sY022GNsNnGEU859zZ8Nxdck%2BLK%2Fk6L4ZCHNBSBkTC%2F%2FH5o42FxZlwV%2BQXEkbp63CFZLAxQ%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=qhareqbmo5cvoacna56vrl1lo1; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664235c420bed-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20798,
+      "text_preview": "[\u0014^13h�j�\u001fN\u0015�I=\u0000�31�\r���Ͽ�\n��\r������4��5�Y]�,��\u000b!v\u0006� \u0007ٖ��(��W\u0003\u0005t�\u0005\u0014��N�z�bEJlK=�h�_c�Ii?�M��b5���j\u0015\u0003I�U�\u0005��m��� ��8��:<E�HB\u00037@Q�h]\u0010��X��0A��\u0006�X\u0016D��Բ��Z� �\u0014��Y��K;WI\t��#@\u0003�g�αs�M���75�!�!V���N�U\u00027�pz�����W�?�\u0019\u0000�\u0007�b\u0010\n�@1\b\u0005 �������\u001f@\u0018\u000e��\u0000�� �\u0007�&\b��@�3@�\u001cA�\u001cs׉똊*�ܜ�-]���\u00058�\u0019Δ;uv\u001f�f+7�v��1��J\u0001�\u0010�.[�\u0018�w�s5q�₇M��(�M�y�Yu\u0015\u0011/\u0018��p�B�T*��kH\bo3\u0019��ω\u000b\u0001kr\u0016�T�z\u0017�\"���\u0000\tk�\u0018\u0001�\u0013}2�\u0015�{�\u0013b4#ɤ�۬\u00161�Iو��,�K\u001b�\u0012��'\u0015�?�#Ad�沰\u0006�����\u0015\u0014�\u0011n�<�q\f�A��\u0003�\u001f�}�u\u00118��\u0015P��:SW�=X��Աz��@]�su\t�Z�B��2�So�\u0002u���+�SW�N�k�UǠ��NmՍ�\u0002u��Ե�i\u0010�h",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/cabins/1",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/cabins/1",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:11 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=R5EtMOfOnHe05Jp2s%2FyrgvLIU%2Bs6KeMhll5HNPTuexLzkOtGKLZtpuP8dClHZpfHCnLqe3YwW0MHY6FPMwFlh2J%2FYzVxTe5gKRA22l1GaJaTJKRMCM0Wn9Y%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=f8tobikrgpoppjn2n1f6bjecm3; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664295972997f-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20674,
+      "text_preview": "[Ea13(l\u001c\u0000\u0000��é\"5�\u0007@u&Ƹ�?~���W���!�q=�e���\u00066��vl���Lp\u0006�A\u0019���$��q�5�\u0006�R\u0003\r���\u0014�i��,16�i����%�i�W������}���5lV��:\bZ�(oDdF�e�ip��EI�\u001f\u0001\r�7�\u0017�7���rS ��e\u0001��o��\u001a��\u001dk�7��:'^zi1�&@���4ݙ��i�i���MM�\b�X�Ӈ*�V\t�\u0010B�\\m{�+ޟ?�\f�b\u0006`1\b\u0005!�\u0018�\u0002�x������\u0007\u0010A�\\\u0001\u0010i\u0006���\u0004��\u000eD;\u0003$�1(��\u0018�u,�Hrs���_�\u0001�AG�l�ݺ*\\��r�ҥ]�1��J\u0001�\u0010�.[�\u0018�w�s5q�₇M��(�M�y�Yu=\u0010Qa������o��; L9&\u0004��dL��!�\u000e�����l���i5!�\u0018�\u0005���\u0018\u0001c#}4�\u0005�{�CB4!ɤ�۬\u0014!�HY��m��s\u000b\f������\u001f�&Ad��23{�����\u0013��\u0003\\Uy�B���|�\u001bx]�q\u0010���CP���PW�\u0014LP\u0017�T�QW�.�\u0007�\u0019Ե�B��2�Q��\u0004u�.�\u001b�QW���[�V��N�F�Ս�\u0002u��",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/availability",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/availability?cabin_id=297&check_in=2026-01-11&check_out=2026-01-13",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:12 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=RKjSRnOqU6572RaPNwCxNsN4D11m7%2FsTFIU4Q%2BaCBxS%2FjJ%2BZaD%2BYDhq1Ygs5vlnOqUQwaRt7vGgngyEb%2F4FzkfaexKJ%2FvEgFbM%2Ba69MIOCPzA587XXsPSb0%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=gj82ts7rgl98v1vsucvb0gcjk5; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86642f3ca1da54-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20626,
+      "text_preview": "[M`1\nI[�\u000f��Ԥ\u001e\u0000u�.����/\u0002�&>�y��/S�o\rlV��� �1s\u0018\u0001g��ȃ������\u0017�\u0002X\u0012��QE��\u0016+�\u0016c�-��wGCO�^-��-V���j�1�DO\u0018-�����Wω��5����@$H��\u0004�\u0001��*���u�g��'\t�\r��,�x��LK\u0019;gl$W�)��Kׁg���Jѥ�����\u0013�\u0000\bf\u0000\u0006\u0003\u0013\u0010\u000b\u0006\u0003\u0013�<���wOw\u000f@�C��\u0000K\u001e�r�@�\u0003��+.%? Y� w���\\Y\u0017�.�#y�g�IA��\t���%�熒\u000f\u0015�*E\u0017*T�*S��X��)\u0005DB��l�c�����ā�\u000b\u001e6=��3��n�QG\u0011��k2�ף{u˯6�2$��;�1���9-JX\u0001I�䪋\u001105��SU�s�z@@�,�����2 S�*9t���\u0003\u001b�\u0012���\u0005S?��T����Tj�I/����H'CZUy�f\f:�V�o����s]��ß_\u0001�\u00077x���\u0014,�s<�7x\t�\u0019?�\u0005�\u0015�A��3��{�\u0000O�\u001c��\u0006/\u0001O�-��\u0004�\u00047��k�\u0004<�K���\u0006ш�c*i�\u0002RF�\u0006\u0006���,��{\u00032�A��\u000f\u0006~�5^�[<\u0003<��\u0012�",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/check-availability",
+    "method": "POST",
+    "result": {
+      "url": "https://www.rrr.co.il/api/check-availability?cabin_id=297&check_in=2026-01-11&check_out=2026-01-13",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:13 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=a9rRbq%2F%2F%2BoznvGcFfp5TXiPQ6qO5Oqz5K7OdLjnPMKm7eQaXlpq4Aej4URwx3Gl1me1bZa22MzZ2NjvUYbXPk97ViXs7qtGzynG494ZwccLLMh0OZXn5CO4%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=kjdoipfe77l4jp2mneomd6nm4v; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664352f3c9384-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20477,
+      "text_preview": "[N_13(l\u001c\u0000\u0000��é\"5�\u0007@u&Ƹ�?~���W���!�q=�����o-mV�r��\u001f���+�\u000f$1\tN\u0002�s \u001cM�TR�]R\tUu��N/�6�\u0003=\u0018\u0007��`{~�Y-��-V�W�Z\u0006.�R\u000f\u0003\u0004>��z�Y�U��5�(\u0014�\u0016�$�!�\u0007��fg���4�c�\u001a\u001d/���Ų���7�u\u0016��~G�!�����N��\u0013\"'@����-�1��˚��75\u001d\"6����v�r�\u0004:�Xm{�}�x�\u00143\u0000�\u0019��\u0000��\u0010P\fB\u0001P�������\u0007\u0010�CR\u001a@�a�t\u0018��\u0005A�\u0007��\u0007\u0004�Y(��p\b��InΝ;�h�}\u0001\u001bf�\r����\\�i\\T.}\\�j���\u0018��?��H�t�-\f�����8Pq�æ�Q~&{�m3�x �����1���ג3��\b��~����ݙ����\u0010L�1�����6ą&hqn.F��Ȝ�t!�^����X2��\u001a+UHfZWj亇��\u000e\u0018%��O\n�T�F���uf\u000fH/���Ȧ#ZUy��\u0018v\u0007�^���ݠ�y\u001e\u0001�?\u0002�/n�\u0002��1؀\u0017x�o�\n�\u0012?�g�k<�P�p���\u0006<�\u000b|�[�\u0002<÷��S�S��\u0006o�",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/areas",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/areas",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:14 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=UPL8%2BFt8%2BvPQC0DpY27tLZa%2F4eEt2Rp8DjZ2m8H4VTXZOQf8SyG2%2B7%2FOgt7UzLqdppUJtQ0zC4p52pTFCcUsOfgSPoVdU3MUHDM071TOEMkTvFF%2B7Pl%2BwPc%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=df168hfjc5k0o54b5ljmr2ppkm; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86643aea229d70-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20604,
+      "text_preview": "[m_1#i���\u0014���\u0003�:\u0013c��\u001f���������u����W嫁��\u001e�\u0006�\u0004�\t�\u0001\u001f��Gv�$��u|�C`\u0000�4� �!EJa�K�\u0018�kZ����g�V�������rZkج��u0\f��_�ɨ4!\u0006NY\u0014Pݤ�J��b%��CǠ���ǲ1 �\u001bE-O>;p\u000b\u0005]\u0016\n\u0010�t�UKM�V\u000e\u0002��a�͗3�\b���\u001f�\u0018Iv��n���v�����\\�D�X���]ʭ\u0012�c��������S�\u0000(�\u0000,>B\u0001\u0010(\u0006�\u0000$������\u0003\b�\u0011)\r j\u0019D�\u0003R�]\b��@���9\u000b��!���U$�9w.ݹv7\u0002\u001cF�\u0006�к��!5���M��E��X��)\u0005DB��l�c�����ā�\u000b\u001e6=\u001b��7���f��@D������$xc��u��GH\b^}9�����%�P\t�s�b\u0004̎��T�l�UO�Д$��/�JDh*e-��sttd�Q�z�$�G�_L\u0010\u0019��̭>�%��}\u001d�d��:��\u000f��\u001ft���~�u]\u0004\u000e~\u0016Կj�.�5<\u0003\u000bԅ:So�5�K�Q]��Q[\b�;Lm�\u0007�@��\u000b�Vm�5�s�N��\u0019�3�Qku��A��ku�n\u001bD#",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/regions",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/regions",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:15 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=PU5HsNLf8OQJyehhDCOpiU4n%2B1WW24tEPK%2Bb6xfAhTnDfT3Bb5VOE1W87x%2Foeq40gf0gs0hw7VA%2FRFUSCIERfBEuZWeDFB5C44iZsKpQVpLECAwQ1FHmn9U%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=jll9bfm47o1uujsgqtuuv65b6d; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b866440b9101683-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20691,
+      "text_preview": "[Sa1\nI[�\u000f��Ԥ\u001e\u0000u�.����\u0002cwC��z��/���Zڬ.AAf6�s\u0018%j��\f�)ƪ\u0007�QGJ!e�!�J\u0011�N�������Y��1C��ß�����X}��T�_\u0003�U\u0019��м&�z�DC=!d\u001d\u001e�,Rp�\u0000?\u0000��h��`w�3c�f�7\u001b�\u001b\fcY\u0010�����2���H��S6r.]\u0007�9����\u000f~OO0\u0003 �\u0001\u0018\fL\u0000,\u0018\fL\u0000��߿{�\u001b�\u0012\u0004��\u0001�\\�\\�\u0015�=�%�����\u0003�U\u000b�*��ɇW\u0017ɑ<�3�\n2��Y�̜�</�f�BE�\u0015)T\u0010�1��J\u0001�\u0010�.[�\u0018�w�s5q�₇Mϗ�������;\u0018�\b�\u0013�5\u00193\n�v��*te\b���&c\u001a�9�* �0��,T-���\u001c�\u001b��@C�\\����9��B̽�.!��d��5V��̴���u���\u001c0J\\\u0017O\n�T��\u0014�!���\u001e�^�o��#��hU��S1�\u000eڽ����A��<\u0002.�\u0018�o��)��#�\u0001O�\b��9�\u0017��g�\u0017x\u0002����\u0006?�\rx���\u00167x\u000ex��p�G�G��5^�9�\u0011��\u0005^6�F4\u001ePI\u000b\u0016�22h`\b�/��\u001b�ЀLpP.�B\u0003��",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/areas/north",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/areas/north",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:16 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=6AWut0VExAPJHm1LoXuDlPqixul5jUz8F%2FIUEDi8p8sYvO2xglS3QaEnEv%2FtLih0VbGBn6KgNpAe3ECxUL4%2BuxGikgE0mZHlPCin688qwGT%2FDPh%2Bj%2F1W19c%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=abe2j6e0548mqgqnl025o6cm9t; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86644728fcda54-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20561,
+      "text_preview": "[�g13(l\u001c\u0000\u0000���)\"9i�\u0000���\u00187�ǯ?��\"0n�c�����������\u0012\u00182�9S9Kx\u0000�`\u0003\u001e0\u001e0G?R\n)�*��\u0015�YY\u0014��bU\u0005��l�2ԧ]COӾ7���U���N�\u001f�dT�ύ್N�s�����R��u-�$�\bh�r�\u001e�;�<�\u0000r�X\u00160w�W��9Y�K��Yڂ\u0017��G��V8Mғ\u0006<�\u0006_|eY�������:$8�*���Rn��\r!tv�����W�?�\u0019\u0000�\u001f��\u0000�\u0002\u0010P\fB\u0001J�������\u0007\u0010@��\u0006\u0010�\u0005(�\u001c\u0010� P�\u0003��\u0003��,S\u0001�\u0010��InΝK\u0017��!�a�!G�]�Sո�單J�[\u0017�\u001fc���\u0014\u0010\t��eCTk�ͯ�X\u0003Ih���Z\f�%\u0015��_\b\u0016l�Y��Ui����iŀ\bt�\u001c\u001a?�_�N��PB�]]��ɱ9��R̽겈�Y2��f�TD�Z�j�{{{\u000e\u0018%�K�%�?��t��,tn\u000fI/�����gcZ�y�s\u0018��n?�z�0\u0018x�G����\u0002��[<�\u000b�\u0001l�S<��x\u0001x���\u001c�\u0012O �\u001f3��;�\u0001��\u0014_�\u0016/\u0000��\rn�\b�\b���+�\u0000<�\u000b�ī\u0006ш�\u0013�h�\"RF�-\f��e",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/regions/upper_galilee",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/regions/upper_galilee",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:17 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=OeNv6zoXV5%2BzXcYLwGxeOQ0Qx46nh8iuZ4dGA%2B60mZfnzkwQuXIIS1rrSvelHxkU77pYrc4yyjk%2FQ5kCeObjjGRB8yQNiv1kWF%2F2kQHGHWgAFUrkWSSC6Gs%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=6mgn99j3c0keea8k3cigdjmc5a; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86644f5982997f-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20669,
+      "text_preview": "[7f13(l\u001c\u0000\u0000���)\"9i�\u0000���\u00187�ǯ?��\"0n�c����2����fu]�M�\u001b3�\u0011p\u0006;��XNlg��_\u0004\n`I\u0005\u0014�*R�\u0014��XI�\u0018�mY\u001e�;\u001azZ�jy�o�j��oڷ��*�ʍ�9FyϽy3�\u0018�0�qt8���I�������0���j�\u0001�`\u0018\u000bA\u001d�?����L�rA�& \u001d\\������\u0007�\u0014qBvײ�<g����ʹ��<c#�ʥ���k�3�T�R�����{f�\u0019\u0000�\u0000`00\u0001@ \u0018�\u0000��߿{�{��`H�\u000e@�\u001d��V�X�\u0016\b��R�\u0003�UKr7஌1�J�%y�+�3eR�*�\u0003d�<�2�\u0007���B���KB=Ʋ�O) \u0012\"�eˆ����_��\u0006�Ђ\u0003;�c���ߺfC\u0018�\u0006�C5�ϧ�-����\b���\u0010؃��E�q\u0016,),\b�.F��Ȝ�t!�^uIHf,���a+UHfZWj�{{{\u000e\u0018%��'\u0005�?��L���uf\u000fH/���kȦ#ZUy��\u0018v\u0007�^���ݠ�y\u001e\u0001�?�\u0002�\u000fn�\u001c/�1؀�x���\u0012�\u0013~�\u000b�+<�P��p���\u0006<�s|�\u001b�\u0004<�7��c�c��\u001a��\u0012�\u0018/�\n�\u001bD#\u001aO��\u0005\u000bI\u0019�",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/features",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/features",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:18 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=60j2UkjbyeCAcH1Dlb5hUzrc1LYs%2BFgxmLnGi%2BWG5dk38WunhRWTNbGTfosPn3ceXAyzpjXzcuLPBAgUraiCZoM2lEcQqDe%2FQCqJvGhfl%2BD3MKY%2B8%2BBeeBU%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=2v7omhncm05qcfo7idhi4o17ko; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664557b9d5591-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20718,
+      "text_preview": "[)`13h�j�\u001fN\u0011�I�\u0007@u&Ƹ�?~���\u0017�q\u0013\u001f�<����~\u001f\u0003ItU���#,kH�)K;��:�j��.���Q�\u001b�\u000erRb[�\u0011E-Oc.3�����\t���7�/�$:�߅��$���:�6��F��\u001a�\u0010~\bh��\u001b�S\u0010�a��\u000e�N\u0012�\u00067\u0018Ʋ �t�5j��>\b. ��,�\u0010�3�\b$@G\u0010#�.�t�/=n�i��fZ�X���\\�R\u00069��\u0003�\u0018�I>�����{z�\u0019\u0002�\f�``\u0002`�``\u0002���~����\u0001\u0016C,y;��G�{Es\u000e\u0004w�F�CSu �U��Y��3�Er$���2)H�5\u0001����rC�\u0007��\u000b\"�\u0017*\u000b��X��)\u0005DB��l�\u0010՚~�k5�@\u0012Zp`��\u0018ڛ䏮��\u001c\u0013\u0004\u001f��1\u00143?g�\u0006�\u0015D�59\u0014Z?G�\bB\t�k]����>�ʒͽ�^\u0011��d��\u001dV�\bM���ж\u0017��\u0005F����\u001f�:Ad�f27������e�!��<�Q\f¾��|�\u0017z=�q\u0010���%P���:S\u0017�\fLPg�X�Q\u0017�>���\u001cԥ:�P\u001fgj�ރ\t�X��7j�.@���j��A\u001d��ڨ+u\u0001�X]�Ku� \u001a�xD\u0015.I��H",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/api/autocomplete",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/api/autocomplete?q=zimmer",
+      "status_code": 404,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:19 GMT",
+        "Content-Type": "text/html; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "x-powered-by": "PHP/7.4.33",
+        "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+        "pragma": "no-cache",
+        "Cache-Control": "public",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=Beq6X7u1N00Uv070i%2BSZkNK6%2B%2FHAJkpxN8HU3Uz47j35%2BUIOCZWNOw%2FWrroNVmvYmNbv7LKrtAGamWDd9v53n4x7sUQFHodaeyp34SGinU0dfvBhAAqEz20%3D\"}]}",
+        "vary": "Accept-Encoding,User-Agent",
+        "Set-Cookie": "PHPSESSID=q1838i0i3tmqitbuunjthv8m4o; path=/",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b86645b696a9d70-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=utf-8",
+      "size": 20548,
+      "text_preview": "[-b13h�j�\u001fN\u0011�I=\u0000�31�\r���Ͽ�\b���X����L��5�Y]�c����a\u0004��\u0019�<;y�3:>�E�\u0000�T@!�\"EZaO��d��٦\u0015Y�\u001d\r=-{����X��g���@\u0012�f�$�y\u001fY����Z\u0014��\u001a�\u00111$�\u000b\u0002�\u0000d�Q��1>L\u0000r�X\u00160w��z���^�I��9.�=��qPя��\u0000�m���N��ݦ�+ߴW�R�F�r)s>=\u0007�\u0018S��iw�\u0004��m�\u000b �\u0005\u0010,L\u0000\u0010\b\u0016&\u0000y�7�.p\\.ɻ\u0005H��xU �u�\u0003��Q�\u0000�\u0000䝌sI@�{�)T�*{��Yy�,�˾r\u0005��H���J2=Ʋ�O) \u0012\"�e�\u001fC�.�&\u000eT\\���\u0018&�{�F�\u0012�\u000f\u000e��2f�����\u0010��H\b�Z�\t�_�n�Dp���+\u0017#`ndNf�\u0010s�zNHf,��|��*$3�+5r���C\u0007�\u0012׳'\u0005�?��Z���uf\u000fH/����Ȧ#ZUy�s\u0018v\u0007�^���ݠ�y\u001e\u0001�?�\u000b�7n�\f��\t؀gx�o�\n�\u0002��\u0012�\u001aw\u0010�O\u0018n�=؀'x�op�W���\u00167x\u0002x�[��\r^\u0001��\u0015^�M�hD�e��`!)#�\u0006\u0006���.���\u0006",
+      "data_type": "text/html"
+    }
+  },
+  {
+    "endpoint": "/autocomplete?q=zimmer",
+    "method": "GET",
+    "result": {
+      "url": "https://www.rrr.co.il/autocomplete/?q=zimmer",
+      "status_code": 403,
+      "headers": {
+        "Date": "Sat, 03 Jan 2026 23:49:20 GMT",
+        "Content-Type": "text/html; charset=iso-8859-1",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "Server": "cloudflare",
+        "cf-cache-status": "DYNAMIC",
+        "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=9cw%2FyjTPbR%2FYZ9ew2rsmt1SMphwGwWfq3R0E%2BdbNhrczP%2FYCzbe02fL3I39SfzIiIdjnrIrDMvuMIbcKfAHmQhAzv5yygneHemks3nYeeJ2hl7xPKiR0THs%3D\"}]}",
+        "Content-Encoding": "br",
+        "CF-RAY": "9b8664619abe7546-TLV",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_type": "text/html; charset=iso-8859-1",
+      "size": 155,
+      "text_preview": "\u001bÆ\u0000\u0000Ä¢mõ+ià-Ç}1«¨.:9p8ù\u000f\u001eµ,°\u0004\u0003Á°Es¬$-§û±oV×åë[c÷:p{/Nû%dEÓöë×F2DÚª®iëò 9Ï&s\u0015â3bë\u00166eãÄç\u0017h±\u0000ÎX#cÒEÆDP5ù\u001d¼²\u00181òÝY\u0002x\n\u001cÅ-\u001a¿-»ÆõUÒªù\u001aÒ\"Î³\u0000",
+      "data_type": "text/html"
+    }
+  }
+]
