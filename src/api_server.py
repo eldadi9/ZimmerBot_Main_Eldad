@@ -39,10 +39,27 @@ from src.db import (
     save_audit_log,
     save_transaction,
     save_quote,
+    create_conversation,
+    save_message,
+    get_conversation,
+    update_conversation_status,
+    get_business_fact,
+    get_all_business_facts,
+    set_business_fact,
+    get_approved_faq,
+    suggest_faq,
+    approve_faq,
+    reject_faq,
+    get_pending_faqs,
+    get_all_faqs,
+    update_faq,
+    delete_faq,
+    delete_business_fact,
 )
 from src.hold import get_hold_manager
 from src.payment import get_payment_manager
 from src.email_service import get_email_service
+from src.agent import Agent
 from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -289,6 +306,9 @@ async def root():
             "quote": "/quote",
             "hold": "/hold",
             "book": "/book",
+            "agent": {
+                "chat": "/agent/chat",
+            },
             "admin": {
                 "bookings": "/admin/bookings",
                 "booking_by_id": "/admin/bookings/{id}",
@@ -1760,6 +1780,790 @@ async def get_all_holds():
         raise HTTPException(status_code=500, detail=f"Error fetching holds: {str(e)}")
 
 
+# ============================================
+# Agent Chat API Endpoints (Stage A2)
+# ============================================
+
+class ChatContext(BaseModel):
+    """Context for chat request"""
+    check_in: Optional[str] = Field(None, description="Check-in date (YYYY-MM-DD)")
+    check_out: Optional[str] = Field(None, description="Check-out date (YYYY-MM-DD)")
+    guests: Optional[int] = Field(None, description="Number of guests")
+    cabin_id: Optional[str] = Field(None, description="Cabin ID")
+
+
+class ChatRequest(BaseModel):
+    """Request model for agent chat"""
+    message: str = Field(..., description="User message")
+    customer_id: Optional[str] = Field(None, description="Customer ID (UUID)")
+    phone: Optional[str] = Field(None, description="Customer phone number")
+    email: Optional[str] = Field(None, description="Customer email address")
+    channel: str = Field("web", description="Channel: web, whatsapp, voice, sms")
+    conversation_id: Optional[str] = Field(None, description="Existing conversation ID (UUID)")
+    context: Optional[ChatContext] = Field(None, description="Conversation context")
+
+
+class ChatResponse(BaseModel):
+    """Response model for agent chat"""
+    answer: str = Field(..., description="Agent response")
+    actions_suggested: List[str] = Field(default_factory=list, description="Suggested actions")
+    confidence: float = Field(0.0, description="Confidence score (0.0-1.0)")
+    conversation_id: str = Field(..., description="Conversation ID (UUID)")
+
+
+@app.post("/agent/chat", response_model=ChatResponse)
+async def agent_chat(request: ChatRequest):
+    """
+    Agent Chat endpoint - handles user messages and returns AI responses
+    
+    This is a placeholder implementation that:
+    - Creates/retrieves conversation
+    - Saves user message
+    - Returns a simple response
+    - Saves assistant response
+    
+    Future: Will integrate with AI model for intelligent responses
+    """
+    try:
+        import uuid
+        
+        # Validate channel
+        valid_channels = ['web', 'whatsapp', 'voice', 'sms']
+        if request.channel not in valid_channels:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid channel. Must be one of: {valid_channels}"
+            )
+        
+        # Get or create customer if phone provided
+        customer_id = request.customer_id
+        if not customer_id and request.phone:
+            # Try to find existing customer by phone
+            from src.db import get_db_connection
+            from psycopg2.extras import RealDictCursor
+            
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor(cursor_factory=RealDictCursor)
+                    cursor.execute("""
+                        SELECT id::text as id FROM customers WHERE phone = %s LIMIT 1
+                    """, (request.phone,))
+                    row = cursor.fetchone()
+                    if row:
+                        customer_id = row['id']
+                    else:
+                        # Create new customer with phone only
+                        customer_id = save_customer_to_db(
+                            name="לקוח",
+                            phone=request.phone
+                        )
+            except Exception as e:
+                print(f"Warning: Could not find/create customer: {e}")
+        
+        # Get or create conversation
+        conversation_id = request.conversation_id
+        conversation_context = {}
+        
+        # If conversation_id provided, load previous context
+        if conversation_id:
+            conversation = get_conversation(conversation_id)
+            if conversation:
+                # Extract context from previous messages (assistant messages have the context)
+                messages = conversation.get('messages', [])
+                # Get the most recent assistant message for context
+                for msg in reversed(messages[-10:]):  # Last 10 messages
+                    if msg.get('role') == 'assistant':
+                        msg_metadata = msg.get('metadata', {})
+                        if msg_metadata:
+                            # Extract cabin_id, dates, quote from previous messages (only if not already set)
+                            if 'cabin_id' in msg_metadata and 'cabin_id' not in conversation_context:
+                                conversation_context['cabin_id'] = msg_metadata['cabin_id']
+                            if 'check_in' in msg_metadata and 'check_in' not in conversation_context:
+                                conversation_context['check_in'] = msg_metadata['check_in']
+                            if 'check_out' in msg_metadata and 'check_out' not in conversation_context:
+                                conversation_context['check_out'] = msg_metadata['check_out']
+                            if 'quote' in msg_metadata and 'last_quote' not in conversation_context:
+                                conversation_context['last_quote'] = msg_metadata['quote']
+                                # Also extract dates from quote
+                                quote = msg_metadata['quote']
+                                if isinstance(quote, dict):
+                                    if 'check_in' in quote and 'check_in' not in conversation_context:
+                                        conversation_context['check_in'] = quote['check_in']
+                                    if 'check_out' in quote and 'check_out' not in conversation_context:
+                                        conversation_context['check_out'] = quote['check_out']
+                                    if 'cabin_id' in quote and 'cabin_id' not in conversation_context:
+                                        conversation_context['cabin_id'] = quote['cabin_id']
+                            # Break after first assistant message to get most recent context
+                            break
+        
+        # Create new conversation if needed
+        if not conversation_id:
+            conversation_id = create_conversation(
+                customer_id=customer_id,
+                channel=request.channel,
+                status="active",
+                metadata={
+                    "context": request.context.dict() if request.context else None,
+                    "phone": request.phone
+                }
+            )
+            
+            if not conversation_id:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to create conversation"
+                )
+        
+        # Save user message
+        user_message_id = save_message(
+            conversation_id=conversation_id,
+            role="user",
+            content=request.message,
+            metadata={
+                "context": request.context.dict() if request.context else None
+            }
+        )
+        
+        if not user_message_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save user message"
+            )
+        
+        # Initialize Agent
+        agent = Agent()
+        
+        # Prepare context - merge request context with conversation context
+        context_dict = request.context.dict() if request.context else {}
+        context_dict.update(conversation_context)  # Conversation context overrides request context
+        
+        # Extract dates and cabin_id from message if not in context
+        extracted_dates = agent.extract_dates(request.message)
+        if extracted_dates:
+            context_dict['check_in'] = context_dict.get('check_in') or extracted_dates.get('check_in')
+            context_dict['check_out'] = context_dict.get('check_out') or extracted_dates.get('check_out')
+            # If month range, add month name for display
+            if extracted_dates.get('is_month_range'):
+                month_num = extracted_dates.get('month', 3)
+                month_names_he = {
+                    1: 'ינואר', 2: 'פברואר', 3: 'מרץ', 4: 'אפריל', 5: 'מאי', 6: 'יוני',
+                    7: 'יולי', 8: 'אוגוסט', 9: 'ספטמבר', 10: 'אוקטובר', 11: 'נובמבר', 12: 'דצמבר'
+                }
+                context_dict['month_name'] = month_names_he.get(month_num, 'החודש')
+                context_dict['is_month_range'] = True
+        
+        extracted_cabin_id = agent.extract_cabin_id(request.message)
+        if extracted_cabin_id:
+            context_dict['cabin_id'] = context_dict.get('cabin_id') or extracted_cabin_id
+        
+        # Extract customer name from message
+        extracted_customer_name = agent.extract_customer_name(request.message)
+        if extracted_customer_name:
+            context_dict['customer_name'] = extracted_customer_name
+        
+        # If message is just a cabin name or "cabin name + info keyword", extract cabin_id
+        if not extracted_cabin_id:
+            message_lower = request.message.lower()
+            message_words = message_lower.split()
+            cabin_names = {'אמי': 'ZB02', 'יולי': 'ZB01', 'מורן': 'ZB03', 'מורני': 'ZB03'}
+            for name, cabin_id in cabin_names.items():
+                # Check if name appears as a word (not part of another word)
+                if name in message_words or f'צימר של {name}' in message_lower or f'צימר {name}' in message_lower:
+                    context_dict['cabin_id'] = cabin_id
+                    break
+        
+        # A4: Check FAQ first (approved only)
+        from src.db import get_approved_faq, suggest_faq, get_business_fact, get_all_business_facts
+        
+        answer = None
+        faq_match = None
+        faq_match = get_approved_faq(request.message)
+        if faq_match:
+            # Check if this FAQ should trigger a dynamic action instead of static answer
+            faq_answer = faq_match.get('answer', '')
+            faq_question = faq_match.get('question', '')
+            
+            # Detect if FAQ is about dynamic data (cabins list, availability, etc.)
+            # If FAQ contains dynamic keywords, trigger tool instead of using static answer
+            # This ensures that dynamic data (like cabin lists) is always up-to-date
+            dynamic_keywords = {
+                'list_cabins': ['רשימת', 'שמות', 'כל הצימרים', 'צימרים', 'list', 'names', 'all cabins', 'מה הצימרים'],
+                'availability': ['זמינות', 'פנוי', 'available', 'availability']
+            }
+            
+            is_dynamic = False
+            dynamic_action = None
+            for action, keywords in dynamic_keywords.items():
+                if any(kw in faq_question.lower() or kw in faq_answer.lower() for kw in keywords):
+                    is_dynamic = True
+                    dynamic_action = action
+                    break
+            
+            if is_dynamic:
+                # This FAQ should trigger a tool call, not return static answer
+                # Don't use FAQ answer, proceed with normal intent detection
+                # This ensures the answer is always up-to-date (e.g., shows all 10 cabins, not just 3)
+                faq_match = None  # Reset to trigger normal flow
+                # Force the intent to match the dynamic action
+                if dynamic_action == 'list_cabins':
+                    # Explicitly trigger list_cabins intent
+                    intent = 'list_cabins'
+                    actions_suggested = ['list_cabins']
+                    confidence = 0.9
+                elif dynamic_action == 'availability':
+                    # Let normal intent detection handle availability
+                    pass
+            else:
+                # Static FAQ - use answer directly (e.g., "שעות הצק אין הן 15:00")
+                answer = faq_answer
+                actions_suggested = []
+                confidence = 0.95
+                intent = 'faq'
+        
+        if not faq_match and not answer:
+            # No FAQ match - proceed with normal intent detection
+            # Detect intent
+            intent, confidence, actions_suggested = agent.detect_intent(
+                request.message,
+                context=context_dict
+            )
+            
+            # A4: Check if question is about business facts
+            message_lower = request.message.lower()
+            business_facts_keywords = {
+                'check_in_time': ['שעת צק אין', 'צק אין', 'check in', 'שעה להגעה'],
+                'check_out_time': ['שעת צק אאוט', 'צק אאוט', 'check out', 'שעה לעזיבה'],
+                'cancellation_policy': ['ביטול', 'מדיניות ביטול', 'cancellation', 'לבטל'],
+                'parking': ['חניה', 'parking', 'מקום חניה'],
+                'pets_allowed': ['חיות מחמד', 'כלב', 'חתול', 'pets', 'pet'],
+                'kosher': ['כשר', 'כשרות', 'kosher'],
+                'wifi': ['wifi', 'ווייפיי', 'אינטרנט', 'אינטרנט חינם']
+            }
+            
+            # Check if message is asking about a business fact
+            for fact_key, keywords in business_facts_keywords.items():
+                if any(kw in message_lower for kw in keywords):
+                    fact_value = get_business_fact(fact_key)
+                    if fact_value:
+                        answer = fact_value
+                        actions_suggested = []
+                        confidence = 0.9
+                        intent = 'business_fact'
+                        break
+        
+        # Call tools based on intent and actions (only if not FAQ or business_fact)
+        tool_results = {}
+        
+        # Tool 0: List all cabins
+        if 'list_cabins' in actions_suggested:
+            try:
+                _, cabins = get_service()
+                tool_results['list_cabins'] = []
+                for cabin in cabins:
+                    cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                    tool_results['list_cabins'].append({
+                        'cabin_id': cabin_id_str,
+                        'name': cabin.get('name'),
+                        'area': cabin.get('area'),
+                    })
+            except Exception as e:
+                print(f"Warning: Could not list cabins: {e}")
+                tool_results['list_cabins'] = None
+        
+        # Tool 1: Check Availability
+        if 'availability' in actions_suggested and context_dict.get('check_in') and context_dict.get('check_out'):
+            try:
+                service, cabins = get_service()
+                check_in_local = parse_datetime_local(context_dict['check_in'])
+                check_out_local = parse_datetime_local(context_dict['check_out'])
+                check_in_utc = to_utc(check_in_local)
+                check_out_utc = to_utc(check_out_local)
+                
+                # Check if this is a month range query
+                is_month_range = context_dict.get('is_month_range', False)
+                filter_cabin_id = context_dict.get('cabin_id')
+                
+                # If month range and specific cabin, get available dates list
+                if is_month_range and filter_cabin_id:
+                    # Find the cabin
+                    target_cabin = None
+                    for cabin in cabins:
+                        cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                        cabin_name = cabin.get('name', '')
+                        if (cabin_id_str.upper() == filter_cabin_id.upper() or 
+                            normalize_text(cabin_name).lower() == normalize_text(filter_cabin_id).lower()):
+                            target_cabin = cabin
+                            break
+                    
+                    if target_cabin:
+                        calendar_id = target_cabin.get('calendar_id') or target_cabin.get('calendarId')
+                        if calendar_id:
+                            # Get all events in the month
+                            from src.main import list_calendar_events
+                            time_min = _to_rfc3339_z(check_in_utc)
+                            time_max = _to_rfc3339_z(check_out_utc)
+                            events = list_calendar_events(service, calendar_id, time_min, time_max)
+                            
+                            # Get all booked dates
+                            booked_dates = set()
+                            for event in events:
+                                start_raw = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date")
+                                end_raw = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date")
+                                if start_raw and end_raw:
+                                    from src.main import _parse_event_dt
+                                    start_dt = _parse_event_dt(start_raw)
+                                    end_dt = _parse_event_dt(end_raw)
+                                    
+                                    # Add all dates in the range
+                                    current = start_dt
+                                    while current < end_dt:
+                                        booked_dates.add(current.strftime('%Y-%m-%d'))
+                                        current += timedelta(days=1)
+                            
+                            # Get all dates in the month
+                            all_dates = []
+                            current = check_in_local
+                            while current <= check_out_local:
+                                all_dates.append(current.strftime('%Y-%m-%d'))
+                                current += timedelta(days=1)
+                            
+                            # Available dates = all dates - booked dates
+                            available_dates = [d for d in all_dates if d not in booked_dates]
+                            
+                            # Store in tool_results for agent to use
+                            tool_results['available_dates'] = available_dates
+                            tool_results['context'] = {
+                                'is_month_range': True,
+                                'check_in': context_dict['check_in'],
+                                'check_out': context_dict['check_out'],
+                                'cabin_id': filter_cabin_id,
+                                'month_name': context_dict.get('month_name', 'החודש')
+                            }
+                            
+                            # Also add the cabin to availability results
+                            cabin_id_str = target_cabin.get('cabin_id_string') or str(target_cabin.get('cabin_id', ''))
+                            images_urls = target_cabin.get('images_urls', [])
+                            if not images_urls and cabin_id_str and not '-' in cabin_id_str:
+                                images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                            
+                            tool_results['availability'] = [{
+                                'cabin_id': cabin_id_str,
+                                'name': target_cabin.get('name'),
+                                'area': target_cabin.get('area'),
+                                'available_dates': available_dates,
+                                'total_available': len(available_dates),
+                                'images_urls': images_urls,
+                            }]
+                        else:
+                            tool_results['availability'] = None
+                    else:
+                        tool_results['availability'] = None
+                else:
+                    # Regular availability check (specific date range)
+                    wanted_features = None
+                    if context_dict.get('features'):
+                        wanted_features = parse_features_arg(context_dict['features'])
+                    
+                    available_cabins = find_available_cabins(
+                        service=service,
+                        cabins=cabins,
+                        check_in_utc=check_in_utc,
+                        check_out_utc=check_out_utc,
+                        adults=context_dict.get('guests'),
+                        kids=None,
+                        area=None,
+                        wanted_features=wanted_features,
+                        verbose=False,
+                    )
+                    
+                    # If cabin_id specified, filter to that cabin only
+                    if filter_cabin_id:
+                        available_cabins = [
+                            c for c in available_cabins 
+                            if (c.get('cabin_id_string') or str(c.get('cabin_id', ''))).upper() == filter_cabin_id.upper()
+                            or normalize_text(str(c.get('name', ''))).lower() == normalize_text(filter_cabin_id).lower()
+                        ]
+                    
+                    # Format results with more details
+                    tool_results['availability'] = []
+                    for cabin in available_cabins[:5]:  # Limit to 5 results
+                        pricing = compute_price_for_stay(cabin, check_in_local, check_out_local)
+                        cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                        
+                        # Get images if available
+                        images_urls = cabin.get('images_urls', [])
+                        if not images_urls and cabin_id_str and not '-' in cabin_id_str:
+                            # Try to construct image path
+                            images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                        
+                        tool_results['availability'].append({
+                            'cabin_id': cabin_id_str,
+                            'name': cabin.get('name'),
+                            'area': cabin.get('area'),
+                            'nights': pricing.get('nights', 0),
+                            'total_price': pricing.get('total', 0),
+                            'features': cabin.get('features'),
+                            'images_urls': images_urls,
+                            'description': cabin.get('description') or cabin.get('notes', '')
+                        })
+                    
+                    tool_results['context'] = {
+                        'check_in': context_dict['check_in'],
+                        'check_out': context_dict['check_out'],
+                        'cabin_id': filter_cabin_id
+                    }
+            except Exception as e:
+                print(f"Warning: Could not check availability: {e}")
+                import traceback
+                traceback.print_exc()
+                tool_results['availability'] = None
+        
+        # Tool 4: Get Cabin Info (general information) - also used for location requests
+        if ('cabin_info' in actions_suggested or intent == 'location') and context_dict.get('cabin_id'):
+            try:
+                _, cabins = get_service()
+                cabin_id = context_dict['cabin_id']
+                
+                # Find cabin
+                chosen = None
+                request_cabin_id_normalized = normalize_text(cabin_id).lower()
+                for cabin in cabins:
+                    cabin_id_string = cabin.get("cabin_id_string")
+                    if cabin_id_string:
+                        cabin_id_string_normalized = normalize_text(str(cabin_id_string)).lower()
+                        if cabin_id_string_normalized == request_cabin_id_normalized:
+                            chosen = cabin
+                            break
+                    
+                    cabin_id_normalized = normalize_text(str(cabin.get("cabin_id", ""))).lower()
+                    if cabin_id_normalized == request_cabin_id_normalized:
+                        chosen = cabin
+                        break
+                    
+                    cabin_name_normalized = normalize_text(str(cabin.get("name", ""))).lower()
+                    if cabin_name_normalized == request_cabin_id_normalized:
+                        chosen = cabin
+                        break
+                
+                if chosen:
+                    cabin_id_str = chosen.get('cabin_id_string') or str(chosen.get('cabin_id', ''))
+                    
+                    # Get images if available
+                    images_urls = chosen.get('images_urls', [])
+                    if not images_urls and cabin_id_str and not '-' in cabin_id_str:
+                        images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                    
+                    # Get base pricing
+                    base_price = chosen.get('base_price', 0) or chosen.get('price', 0)
+                    weekend_price = chosen.get('weekend_price', 0) or chosen.get('weekend', 0)
+                    
+                    # Get address components from Google Sheets format
+                    # Google Sheets returns exact column names as keys
+                    street_name = chosen.get('Street name + number', '') or chosen.get('street_name', '') or chosen.get('street', '')
+                    city = chosen.get('City', '') or chosen.get('city', '')
+                    postal_code = chosen.get('Postal code', '') or chosen.get('postal_code', '')
+                    
+                    # Convert postal_code to string if it's a number
+                    if postal_code and not isinstance(postal_code, str):
+                        postal_code = str(postal_code)
+                    
+                    # Build full address
+                    address_parts = []
+                    if street_name:
+                        address_parts.append(str(street_name))
+                    if city:
+                        address_parts.append(str(city))
+                    if postal_code:
+                        address_parts.append(str(postal_code))
+                    full_address = ', '.join(address_parts) if address_parts else (chosen.get('address') or chosen.get('location', ''))
+                    
+                    tool_results['cabin_info'] = {
+                        'cabin_id': cabin_id_str,
+                        'name': chosen.get('name'),
+                        'area': chosen.get('area'),
+                        'address': full_address,
+                        'street_name': street_name,
+                        'city': city,
+                        'postal_code': postal_code,
+                        'description': chosen.get('description') or chosen.get('notes', ''),
+                        'features': chosen.get('features'),
+                        'images_urls': images_urls,
+                        'base_price': base_price,
+                        'weekend_price': weekend_price,
+                        'max_adults': chosen.get('max_adults', 0),
+                        'max_kids': chosen.get('max_kids', 0),
+                    }
+                else:
+                    tool_results['cabin_info'] = None
+            except Exception as e:
+                print(f"Warning: Could not get cabin info: {e}")
+                tool_results['cabin_info'] = None
+        
+        # Tool 2: Get Quote
+        if 'quote' in actions_suggested and context_dict.get('cabin_id') and context_dict.get('check_in') and context_dict.get('check_out'):
+            try:
+                # Use the existing quote endpoint logic
+                from src.pricing import PricingEngine
+                _, cabins = get_service()
+                
+                # Find cabin
+                chosen = None
+                cabin_id = context_dict['cabin_id']
+                request_cabin_id_normalized = normalize_text(cabin_id).lower()
+                for cabin in cabins:
+                    cabin_id_string = cabin.get("cabin_id_string")
+                    if cabin_id_string:
+                        cabin_id_string_normalized = normalize_text(str(cabin_id_string)).lower()
+                        if cabin_id_string_normalized == request_cabin_id_normalized:
+                            chosen = cabin
+                            break
+                    
+                    cabin_id_normalized = normalize_text(str(cabin.get("cabin_id", ""))).lower()
+                    if cabin_id_normalized == request_cabin_id_normalized:
+                        chosen = cabin
+                        break
+                    
+                    cabin_name_normalized = normalize_text(str(cabin.get("name", ""))).lower()
+                    if cabin_name_normalized == request_cabin_id_normalized:
+                        chosen = cabin
+                        break
+                
+                if chosen:
+                    check_in_local = parse_datetime_local(context_dict['check_in'])
+                    check_out_local = parse_datetime_local(context_dict['check_out'])
+                    
+                    engine = PricingEngine()
+                    pricing = engine.calculate_price_breakdown(
+                        cabin=chosen,
+                        check_in=check_in_local,
+                        check_out=check_out_local,
+                        addons=None,
+                        apply_discounts=True
+                    )
+                    
+                    tool_results['quote'] = {
+                        'cabin_id': cabin_id,
+                        'cabin_name': chosen.get('name'),
+                        'nights': pricing['nights'],
+                        'total': pricing['total'],
+                        'breakdown': pricing.get('breakdown', []),
+                        'check_in': context_dict['check_in'],
+                        'check_out': context_dict['check_out']
+                    }
+            except Exception as e:
+                print(f"Warning: Could not get quote: {e}")
+                tool_results['quote'] = None
+        
+        # Tool 3: Create Hold
+        if 'hold' in actions_suggested and context_dict.get('cabin_id') and context_dict.get('check_in') and context_dict.get('check_out'):
+            try:
+                hold_manager = get_hold_manager()
+                
+                check_in_date = context_dict['check_in']
+                check_out_date = context_dict['check_out']
+                
+                # Parse dates if needed
+                if ' ' in check_in_date:
+                    check_in_date = check_in_date.split(' ')[0]
+                if ' ' in check_out_date:
+                    check_out_date = check_out_date.split(' ')[0]
+                
+                hold_data = hold_manager.create_hold(
+                    cabin_id=context_dict['cabin_id'],
+                    check_in=check_in_date,
+                    check_out=check_out_date,
+                    customer_name=None,
+                    customer_id=customer_id
+                )
+                
+                if hold_data:
+                    tool_results['hold'] = {
+                        'hold_id': hold_data.get('hold_id'),
+                        'expires_at': hold_data.get('expires_at'),
+                        'status': hold_data.get('status')
+                    }
+            except Exception as e:
+                print(f"Warning: Could not create hold: {e}")
+                tool_results['hold'] = None
+        
+        # Handle special cases: "כן" or "תעשה הזמנה" - if we have quote, proceed to booking
+        if intent in ['confirm', 'book_now']:
+            # Try to get quote from context or tool_results
+            quote = context_dict.get('last_quote') or (tool_results.get('quote') if tool_results else None)
+            cabin_id = context_dict.get('cabin_id')
+            check_in = context_dict.get('check_in')
+            check_out = context_dict.get('check_out')
+            
+            # If we have quote, extract info from it
+            if quote and isinstance(quote, dict):
+                cabin_id = quote.get('cabin_id') or cabin_id
+                check_in = quote.get('check_in') or check_in
+                check_out = quote.get('check_out') or check_out
+            
+            if cabin_id and check_in and check_out:
+                # Create hold first, then booking
+                try:
+                    hold_manager = get_hold_manager()
+                    check_in_date = check_in.split(' ')[0] if ' ' in check_in else check_in
+                    check_out_date = check_out.split(' ')[0] if ' ' in check_out else check_out
+                    
+                    # Get customer name from context if available
+                    customer_name = context_dict.get('customer_name')
+                    
+                    hold_data = hold_manager.create_hold(
+                        cabin_id=cabin_id,
+                        check_in=check_in_date,
+                        check_out=check_out_date,
+                        customer_name=customer_name,
+                        customer_id=customer_id
+                    )
+                    
+                    if hold_data:
+                        # Also create calendar event
+                        try:
+                            service, cabins = get_service()
+                            chosen_cabin = None
+                            for cabin in cabins:
+                                cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                                if cabin_id_str.upper() == cabin_id.upper():
+                                    chosen_cabin = cabin
+                                    break
+                            
+                            if chosen_cabin:
+                                check_in_local = parse_datetime_local(f"{check_in_date} 15:00")
+                                check_out_local = parse_datetime_local(f"{check_out_date} 11:00")
+                                
+                                # Get customer name from context if available
+                                customer_name_for_event = customer_name or "לקוח"
+                                
+                                event = create_calendar_event(
+                                    service=service,
+                                    cabin=chosen_cabin,
+                                    check_in_local=check_in_local,
+                                    check_out_local=check_out_local,
+                                    customer_name=customer_name_for_event,
+                                    customer_phone=None,
+                                    customer_email=None,
+                                    notes="הזמנה דרך Agent Chat"
+                                )
+                                
+                                if event:
+                                    answer = f"✅ **הזמנה נוצרה בהצלחה!**\n\n"
+                                    answer += f"🏡 צימר: {chosen_cabin.get('name', cabin_id)}\n"
+                                    answer += f"📅 תאריכים: {check_in_date} → {check_out_date}\n"
+                                    answer += f"🔒 Hold ID: {hold_data.get('hold_id', '')}\n"
+                                    answer += f"📅 Event ID: {event.get('id', 'N/A')}\n"
+                                    if event.get('htmlLink'):
+                                        answer += f"🔗 [פתח ביומן Google]({event.get('htmlLink')})\n"
+                                    answer += f"\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n"
+                                    answer += f"\n💡 להשלמת התשלום, אנא השתמש ב-endpoint /book עם hold_id"
+                                else:
+                                    answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\n⚠️ לא הצלחתי ליצור אירוע ביומן. להשלמת ההזמנה, אנא השתמש ב-endpoint /book"
+                            else:
+                                answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\nלהשלמת ההזמנה, אנא השתמש ב-endpoint /book"
+                        except Exception as e:
+                            print(f"Warning: Could not create calendar event: {e}")
+                            answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\n⚠️ לא הצלחתי ליצור אירוע ביומן. להשלמת ההזמנה, אנא השתמש ב-endpoint /book"
+                        
+                        tool_results['hold'] = hold_data
+                    else:
+                        answer = "❌ לא הצלחתי ליצור שריין. האם תוכל לנסות שוב?"
+                except Exception as e:
+                    print(f"Warning: Could not create hold: {e}")
+                    answer = f"❌ שגיאה ביצירת הזמנה: {str(e)}"
+            else:
+                answer = f"❌ חסרים פרטים להזמנה.\n"
+                if not cabin_id:
+                    answer += "• ציין צימר (ZB01, ZB02, ZB03 או שמות: יולי, אמי, מורן)\n"
+                if not check_in or not check_out:
+                    answer += "• ציין תאריכים (לדוגמה: 15.09.26 - 18.09.26)"
+        else:
+            # Generate response using Agent (only if not FAQ or business_fact)
+            if not answer:
+                answer = agent.generate_response(
+                    intent=intent,
+                    actions=actions_suggested,
+                    context=context_dict,
+                    tool_results=tool_results
+                )
+                
+                # A4: If Agent generated an answer and no FAQ was found, suggest it as FAQ
+                if intent not in ['faq', 'business_fact'] and answer and not faq_match:
+                    # Suggest this answer as FAQ for Host approval
+                    suggested_faq_id = suggest_faq(
+                        question=request.message,
+                        answer=answer,
+                        customer_id=customer_id
+                    )
+                    if suggested_faq_id:
+                        # Add note to answer that it's pending approval
+                        answer += "\n\n💡 הערה: תשובה זו הוצעה לאישור. בעל הצימר יאשר או ידחה אותה."
+        
+        # Save assistant response with context for next messages
+        assistant_metadata = {
+            "actions_suggested": actions_suggested,
+            "confidence": confidence,
+            "intent": intent,
+            "tool_results": tool_results
+        }
+        
+        # Save context for next messages
+        if context_dict.get('cabin_id'):
+            assistant_metadata['cabin_id'] = context_dict['cabin_id']
+        if context_dict.get('check_in'):
+            assistant_metadata['check_in'] = context_dict['check_in']
+        if context_dict.get('check_out'):
+            assistant_metadata['check_out'] = context_dict['check_out']
+        if 'quote' in tool_results and tool_results['quote']:
+            assistant_metadata['quote'] = tool_results['quote']
+        
+        assistant_message_id = save_message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=answer,
+            metadata=assistant_metadata
+        )
+        
+        # Save audit log for conversation
+        try:
+            save_audit_log(
+                table_name="conversations",
+                record_id=conversation_id,
+                action="INSERT",
+                new_values={
+                    "customer_id": customer_id,
+                    "channel": request.channel,
+                    "status": "active",
+                    "message_count": 2  # user + assistant
+                }
+            )
+        except Exception as audit_error:
+            print(f"Warning: Could not save audit log: {audit_error}")
+        
+        # Add availability results to context for frontend display
+        response_context = context_dict.copy() if context_dict else {}
+        if 'availability' in tool_results and tool_results['availability']:
+            response_context['availability_results'] = tool_results['availability']
+        
+        return ChatResponse(
+            answer=answer,
+            actions_suggested=actions_suggested,
+            confidence=confidence,
+            conversation_id=conversation_id,
+            context=ChatContext(**response_context) if response_context else None
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing chat request: {str(e)}"
+        )
+
+
 @app.get("/admin/audit")
 async def get_audit_logs(
     table_name: Optional[str] = None,
@@ -1877,6 +2681,197 @@ async def get_audit_logs(
     except Exception as e:
         print(f"Error in /admin/audit: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching audit logs: {str(e)}")
+
+
+# ============================================
+# A4: Admin Endpoints for FAQ and Business Facts
+# ============================================
+
+class FAQApprovalRequest(BaseModel):
+    """Request to approve or reject a FAQ"""
+    faq_id: str = Field(..., description="FAQ ID to approve/reject")
+    approved: bool = Field(..., description="True to approve, False to reject")
+    approved_by: Optional[str] = Field(None, description="Host/Admin ID who approved")
+    question: Optional[str] = Field(None, description="Edited question (optional)")
+    answer: Optional[str] = Field(None, description="Edited answer (optional)")
+
+
+class BusinessFactRequest(BaseModel):
+    """Request to set a business fact"""
+    fact_key: str = Field(..., description="Fact key (e.g., 'check_in_time')")
+    fact_value: str = Field(..., description="Fact value (e.g., '15:00')")
+    category: Optional[str] = Field(None, description="Category (e.g., 'hours', 'policies')")
+    description: Optional[str] = Field(None, description="Description")
+
+
+@app.get("/admin/faq/pending")
+async def get_pending_faqs_endpoint():
+    """
+    Get all pending FAQs waiting for Host approval
+    """
+    try:
+        pending_faqs = get_pending_faqs()
+        return {
+            "count": len(pending_faqs),
+            "faqs": pending_faqs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching pending FAQs: {str(e)}")
+
+
+@app.post("/admin/faq/approve")
+async def approve_faq_endpoint(request: FAQApprovalRequest):
+    """
+    Approve or reject a FAQ (Host only)
+    Can optionally update question and answer during approval
+    """
+    try:
+        if request.approved:
+            success = approve_faq(
+                request.faq_id, 
+                request.approved_by,
+                request.question,
+                request.answer
+            )
+            if success:
+                return {"message": "FAQ approved successfully", "faq_id": request.faq_id}
+            else:
+                # Check if FAQ exists to give better error message
+                from src.db import get_all_faqs
+                all_faqs = get_all_faqs(include_pending=True)
+                faq_exists = any(str(faq.get('id')) == request.faq_id for faq in all_faqs)
+                if not faq_exists:
+                    raise HTTPException(status_code=404, detail="FAQ not found")
+                else:
+                    # FAQ exists but approval failed - might already be approved, try to update instead
+                    if request.question or request.answer:
+                        # Try to update the FAQ
+                        from src.db import update_faq
+                        update_success = update_faq(request.faq_id, request.question, request.answer)
+                        if update_success:
+                            return {"message": "FAQ updated successfully (was already approved)", "faq_id": request.faq_id}
+                    raise HTTPException(status_code=400, detail="FAQ is already approved. Use PUT /admin/faq/{faq_id} to update it.")
+        else:
+            success = reject_faq(request.faq_id)
+            if success:
+                return {"message": "FAQ rejected successfully", "faq_id": request.faq_id}
+            else:
+                raise HTTPException(status_code=404, detail="FAQ not found or already processed")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing FAQ: {str(e)}")
+
+
+@app.get("/admin/business-facts")
+async def get_business_facts_endpoint(category: Optional[str] = None):
+    """
+    Get all business facts (or filtered by category)
+    Returns facts as simple key->value dict for backward compatibility
+    Also includes detailed version with categories
+    """
+    try:
+        facts_dict = get_all_business_facts(category)
+        # Convert to simple key->value format for backward compatibility
+        facts = {key: data['value'] for key, data in facts_dict.items()}
+        return {
+            "count": len(facts),
+            "facts": facts,
+            "facts_detailed": facts_dict  # Include detailed version with categories
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching business facts: {str(e)}")
+
+
+@app.post("/admin/business-facts")
+async def set_business_fact_endpoint(request: BusinessFactRequest):
+    """
+    Set or update a business fact (Host only)
+    """
+    try:
+        success = set_business_fact(
+            fact_key=request.fact_key,
+            fact_value=request.fact_value,
+            category=request.category,
+            description=request.description
+        )
+        if success:
+            return {
+                "message": "Business fact set successfully",
+                "fact_key": request.fact_key,
+                "fact_value": request.fact_value
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to set business fact")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error setting business fact: {str(e)}")
+
+
+@app.get("/admin/faq/all")
+async def get_all_faqs_endpoint(include_pending: bool = True):
+    """
+    Get all FAQs (approved and optionally pending)
+    """
+    try:
+        faqs = get_all_faqs(include_pending=include_pending)
+        return {"faqs": faqs, "count": len(faqs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting FAQs: {str(e)}")
+
+
+@app.put("/admin/faq/{faq_id}")
+async def update_faq_endpoint(faq_id: str, request: FAQApprovalRequest):
+    """
+    Update an existing FAQ (approved or pending)
+    """
+    try:
+        success = update_faq(
+            faq_id=faq_id,
+            question=request.question,
+            answer=request.answer
+        )
+        if success:
+            return {"message": "FAQ updated successfully", "faq_id": faq_id}
+        else:
+            raise HTTPException(status_code=404, detail="FAQ not found or no changes provided")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating FAQ: {str(e)}")
+
+
+@app.delete("/admin/faq/{faq_id}")
+async def delete_faq_endpoint(faq_id: str):
+    """
+    Delete a FAQ (approved or pending)
+    """
+    try:
+        success = delete_faq(faq_id)
+        if success:
+            return {"message": "FAQ deleted successfully", "faq_id": faq_id}
+        else:
+            raise HTTPException(status_code=404, detail="FAQ not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting FAQ: {str(e)}")
+
+
+@app.delete("/admin/business-facts/{fact_key}")
+async def delete_business_fact_endpoint(fact_key: str):
+    """
+    Delete (deactivate) a business fact
+    """
+    try:
+        success = delete_business_fact(fact_key)
+        if success:
+            return {"message": "Business fact deleted successfully", "fact_key": fact_key}
+        else:
+            raise HTTPException(status_code=404, detail="Business fact not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting business fact: {str(e)}")
 
 
 if __name__ == "__main__":
