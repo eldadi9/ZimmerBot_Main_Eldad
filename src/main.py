@@ -2,7 +2,7 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 import gspread
@@ -216,6 +216,117 @@ def delete_calendar_event(
     except Exception as e:
         print(f"Error deleting calendar event {event_id}: {e}")
         return False
+
+
+def update_calendar_event(
+    service,
+    event_id: str,
+    calendar_id: str,
+    summary: Optional[str] = None,
+    description: Optional[str] = None,
+    start_local: Optional[datetime] = None,
+    end_local: Optional[datetime] = None
+) -> Optional[dict]:
+    """
+    Update an existing calendar event
+    
+    Args:
+        service: Google Calendar API service
+        event_id: ID of the event to update
+        calendar_id: Calendar ID
+        summary: New summary (optional)
+        description: New description (optional)
+        start_local: New start time (optional, timezone-aware)
+        end_local: New end time (optional, timezone-aware)
+    
+    Returns:
+        Updated event dict or None if error
+    """
+    try:
+        # Validate inputs
+        if not event_id:
+            print(f"❌ Error: event_id is required for update_calendar_event")
+            return None
+        if not calendar_id:
+            print(f"❌ Error: calendar_id is required for update_calendar_event")
+            return None
+        
+        # Get existing event
+        try:
+            event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+        except Exception as get_error:
+            error_msg = str(get_error)
+            if '404' in error_msg or 'Not Found' in error_msg:
+                print(f"⚠️ Calendar event {event_id[:20] if len(event_id) > 20 else event_id}... not found in calendar {calendar_id}, skipping update")
+            elif '403' in error_msg or 'Forbidden' in error_msg:
+                print(f"❌ Permission denied for calendar {calendar_id} (event {event_id[:20] if len(event_id) > 20 else event_id}...). Check API credentials and calendar sharing.")
+            else:
+                print(f"❌ Error getting calendar event {event_id[:20] if len(event_id) > 20 else event_id}...: {get_error}")
+            return None
+        
+        # Update fields if provided
+        changed = False
+        if summary and event.get('summary') != summary:
+            event['summary'] = summary
+            changed = True
+        if description is not None and event.get('description') != description:
+            event['description'] = description
+            changed = True
+        if start_local:
+            if start_local.tzinfo is None:
+                start_local = start_local.replace(tzinfo=ISRAEL_TZ)
+            new_start_iso = start_local.isoformat()
+            current_start = event.get('start', {})
+            if current_start.get('dateTime') != new_start_iso:
+                event['start'] = {
+                    'dateTime': new_start_iso,
+                    'timeZone': 'Asia/Jerusalem'
+                }
+                changed = True
+        if end_local:
+            if end_local.tzinfo is None:
+                end_local = end_local.replace(tzinfo=ISRAEL_TZ)
+            new_end_iso = end_local.isoformat()
+            current_end = event.get('end', {})
+            if current_end.get('dateTime') != new_end_iso:
+                event['end'] = {
+                    'dateTime': new_end_iso,
+                    'timeZone': 'Asia/Jerusalem'
+                }
+                changed = True
+        
+        # Only update if there are actual changes
+        if not changed:
+            print(f"ℹ️ No changes detected for event {event_id[:20] if len(event_id) > 20 else event_id}..., skipping update")
+            return event
+        
+        # Update event
+        updated_event = service.events().update(
+            calendarId=calendar_id,
+            eventId=event_id,
+            body=event
+        ).execute()
+        
+        return updated_event
+    
+    except Exception as e:
+        event_id_display = event_id[:20] if event_id and len(event_id) > 20 else (event_id or 'unknown')
+        calendar_id_display = calendar_id[:30] if calendar_id and len(calendar_id) > 30 else (calendar_id or 'unknown')
+        error_str = str(e)
+        
+        # Provide more specific error messages
+        if '404' in error_str or 'Not Found' in error_str:
+            print(f"⚠️ Calendar event {event_id_display}... not found in calendar {calendar_id_display}...")
+        elif '403' in error_str or 'Forbidden' in error_str:
+            print(f"❌ Permission denied for calendar {calendar_id_display}... (event {event_id_display}...). Check API credentials and calendar sharing.")
+        elif '401' in error_str or 'Unauthorized' in error_str:
+            print(f"❌ Authentication failed. Please refresh Google API credentials.")
+        else:
+            print(f"❌ Error updating calendar event {event_id_display}... in calendar {calendar_id_display}...: {e}")
+        
+        import traceback
+        traceback.print_exc()
+        return None
 
 from datetime import datetime, timedelta, timezone
 

@@ -558,12 +558,12 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h1 style="margin: 0;">🏡 ZimmerBot - הזמנת מקום</h1>
       <div style="display: flex; gap: 10px;">
-        <button id="agentChatBtn" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);">
+        <button id="agentChatBtn" onclick="openAgentChatModal()" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);">
           🤖 Agent Chat
         </button>
-        <button id="adminBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-          🔧 Admin Panel
-        </button>
+        <button id="adminBtn" onclick="openAdminModal()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+        🔧 Admin Panel
+      </button>
       </div>
     </div>
 
@@ -2032,6 +2032,7 @@
     }
     
     // סגירת modal בלחיצה על X או מחוץ לחלון
+    // Note: This will be extended in DOMContentLoaded to include admin and agent chat modals
     window.onclick = function(event) {
       const bookingModal = el("bookingModal");
       const paymentModal = el("paymentModal");
@@ -2503,6 +2504,9 @@
             ` : ''}
             
             <div style="display: flex; gap: 10px; margin-top: 20px;">
+              <button onclick="editBooking('${bookingId}')" style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                ✏️ ערוך הזמנה
+              </button>
               ${canCancel ? `
                 <button class="btn-danger" onclick="cancelBooking('${bookingId}')" style="padding: 10px 20px;">
                   ביטול הזמנה
@@ -2524,6 +2528,156 @@
     
     function closeBookingDetailModal() {
       const modal = document.getElementById('bookingDetailModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    async function editBooking(bookingId) {
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/bookings/${bookingId}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const booking = await response.json();
+        
+        // Get all cabins for dropdown
+        const cabinsResponse = await fetch(`${apiBase}/cabins`);
+        const cabins = await cabinsResponse.ok ? await cabinsResponse.json() : [];
+        
+        // Format dates for input fields (YYYY-MM-DD format)
+        const checkInDate = booking.check_in ? booking.check_in.split('T')[0] : '';
+        const checkOutDate = booking.check_out ? booking.check_out.split('T')[0] : '';
+        
+        const modal = document.getElementById('bookingEditModal');
+        const content = document.getElementById('bookingEditContent');
+        
+        content.innerHTML = `
+          <div style="padding: 20px;">
+            <h2 style="margin-top: 0; color: #667eea;">עריכת הזמנה</h2>
+            
+            <form id="editBookingForm" onsubmit="saveBookingEdit(event, '${bookingId}')">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                  <h3 style="color: #333; margin-bottom: 10px;">פרטי לקוח</h3>
+                  <label>שם לקוח:</label>
+                  <input type="text" id="editCustomerName" value="${booking.customer_name || ''}" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>אימייל:</label>
+                  <input type="email" id="editCustomerEmail" value="${booking.customer_email || ''}" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>טלפון:</label>
+                  <input type="tel" id="editCustomerPhone" value="${booking.customer_phone || ''}" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                </div>
+                
+                <div>
+                  <h3 style="color: #333; margin-bottom: 10px;">פרטי הזמנה</h3>
+                  <label>צימר:</label>
+                  <select id="editCabinId" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                    ${cabins.map(cabin => `
+                      <option value="${cabin.cabin_id || cabin.id}" ${(cabin.cabin_id || cabin.id) === booking.cabin_id ? 'selected' : ''}>
+                        ${cabin.name || 'Unknown'} ${cabin.cabin_id ? `(${cabin.cabin_id})` : ''}
+                      </option>
+                    `).join('')}
+                  </select>
+                  
+                  <label>Check-in:</label>
+                  <input type="date" id="editCheckIn" value="${checkInDate}" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>Check-out:</label>
+                  <input type="date" id="editCheckOut" value="${checkOutDate}" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>מבוגרים:</label>
+                  <input type="number" id="editAdults" value="${booking.adults || 0}" min="0" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>ילדים:</label>
+                  <input type="number" id="editKids" value="${booking.kids || 0}" min="0" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>מחיר כולל (ILS):</label>
+                  <input type="number" id="editTotalPrice" value="${booking.total_price || 0}" min="0" step="0.01" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                  
+                  <label>סטטוס:</label>
+                  <select id="editStatus" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 4px;">
+                    <option value="hold" ${booking.status === 'hold' ? 'selected' : ''}>Hold</option>
+                    <option value="confirmed" ${booking.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                    <option value="cancelled" ${booking.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                  💾 שמור שינויים
+                </button>
+                <button type="button" onclick="closeBookingEditModal()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                  ביטול
+                </button>
+              </div>
+            </form>
+          </div>
+        `;
+        
+        modal.style.display = 'block';
+      } catch (error) {
+        alert(`שגיאה בטעינת פרטי ההזמנה לעריכה: ${error.message}`);
+        console.error('Error loading booking for edit:', error);
+      }
+    }
+    
+    async function saveBookingEdit(event, bookingId) {
+      event.preventDefault();
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        
+        const updateData = {
+          customer_name: document.getElementById('editCustomerName').value,
+          customer_email: document.getElementById('editCustomerEmail').value || null,
+          customer_phone: document.getElementById('editCustomerPhone').value || null,
+          cabin_id: document.getElementById('editCabinId').value,
+          check_in: document.getElementById('editCheckIn').value,
+          check_out: document.getElementById('editCheckOut').value,
+          adults: parseInt(document.getElementById('editAdults').value) || 0,
+          kids: parseInt(document.getElementById('editKids').value) || 0,
+          total_price: parseFloat(document.getElementById('editTotalPrice').value) || 0,
+          status: document.getElementById('editStatus').value
+        };
+        
+        const response = await fetch(`${apiBase}/admin/bookings/${bookingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updateData)
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.calendar_moved) {
+          alert(`✅ ${result.message}\n\nהאירוע הועבר אוטומטית ליומן החדש!`);
+        } else {
+          alert(`✅ ${result.message}`);
+        }
+        
+        // Close edit modal
+        closeBookingEditModal();
+        
+        // Close detail modal
+        closeBookingDetailModal();
+        
+        // Reload bookings list
+        loadBookings();
+        
+      } catch (error) {
+        alert(`❌ שגיאה בשמירת השינויים: ${error.message}`);
+        console.error('Error saving booking edit:', error);
+      }
+    }
+    
+    function closeBookingEditModal() {
+      const modal = document.getElementById('bookingEditModal');
       if (modal) modal.style.display = 'none';
     }
     
@@ -2579,6 +2733,220 @@
       else if (tab === 'audit') loadAuditLog();
       else if (tab === 'stats') loadStats();
       else if (tab === 'faq') loadFaqAndFacts();
+      else if (tab === 'sync') loadSyncStatus();
+    }
+
+    function switchFaqTab(tab) {
+      // Hide all FAQ sections
+      document.getElementById('pendingFaqSection').style.display = 'none';
+      document.getElementById('allFaqSection').style.display = 'none';
+      document.getElementById('businessFactsSection').style.display = 'none';
+      
+      // Remove active class from all FAQ tabs
+      document.querySelectorAll('#tabPendingFaq, #tabAllFaq, #tabBusinessFacts').forEach(el => {
+        if (el) el.classList.remove('active');
+      });
+      
+      // Show selected section and mark tab as active
+      if (tab === 'pending') {
+        document.getElementById('pendingFaqSection').style.display = 'block';
+        const tabBtn = document.getElementById('tabPendingFaq');
+        if (tabBtn) tabBtn.classList.add('active');
+        loadPendingFaqs();
+      } else if (tab === 'all') {
+        document.getElementById('allFaqSection').style.display = 'block';
+        const tabBtn = document.getElementById('tabAllFaq');
+        if (tabBtn) tabBtn.classList.add('active');
+        loadAllFaqs();
+      } else if (tab === 'facts') {
+        document.getElementById('businessFactsSection').style.display = 'block';
+        const tabBtn = document.getElementById('tabBusinessFacts');
+        if (tabBtn) tabBtn.classList.add('active');
+        loadBusinessFacts();
+      }
+    }
+
+    async function loadAllFaqs() {
+      const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+      const container = document.getElementById('allFaqsList');
+      
+      try {
+        const response = await fetch(`${apiBase}/admin/faq/all?include_pending=true`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const faqs = data.faqs || [];
+        
+        if (faqs.length === 0) {
+          container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">אין FAQs</p>';
+          return;
+        }
+
+        let html = '';
+        faqs.forEach(faq => {
+          const statusClass = faq.approved ? 'status-approved' : 'status-pending';
+          const statusText = faq.approved ? '✅ מאושר' : '⏳ ממתין לאישור';
+          const approvedAt = faq.approved_at ? new Date(faq.approved_at).toLocaleString('he-IL') : 'N/A';
+          const createdAt = faq.created_at ? new Date(faq.created_at).toLocaleString('he-IL') : 'N/A';
+          const questionId = `all_faq_question_${faq.id}`;
+          const answerId = `all_faq_answer_${faq.id}`;
+          
+          html += `
+            <div id="all_faq_${faq.id}" style="background: white; border: 2px solid ${faq.approved ? '#4CAF50' : '#ff9800'}; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                  <div style="margin-bottom: 10px;">
+                    <span class="status-badge ${statusClass}" style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: ${faq.approved ? '#d4edda' : '#fff3cd'}; color: ${faq.approved ? '#155724' : '#856404'};">${statusText}</span>
+                  </div>
+                  <strong style="color: ${faq.approved ? '#4CAF50' : '#ff9800'};">שאלה:</strong>
+                  <div style="margin: 5px 0;">
+                    <div id="${questionId}_display" style="padding: 8px; background: #f5f5f5; border-radius: 4px; min-height: 20px;">${faq.question || 'N/A'}</div>
+                    <textarea id="${questionId}_edit" style="display: none; width: 100%; padding: 8px; border: 2px solid #2196F3; border-radius: 4px; min-height: 40px; font-family: inherit;">${faq.question || ''}</textarea>
+                  </div>
+                  <strong style="color: ${faq.approved ? '#4CAF50' : '#ff9800'}; margin-top: 10px; display: block;">תשובה:</strong>
+                  <div style="margin: 5px 0;">
+                    <div id="${answerId}_display" style="padding: 8px; background: #f5f5f5; border-radius: 4px; min-height: 40px; white-space: pre-wrap;">${faq.answer || faq.suggested_answer || 'N/A'}</div>
+                    <textarea id="${answerId}_edit" style="display: none; width: 100%; padding: 8px; border: 2px solid #2196F3; border-radius: 4px; min-height: 80px; font-family: inherit;">${faq.answer || faq.suggested_answer || ''}</textarea>
+                  </div>
+                  <div style="margin-top: 10px; font-size: 11px; color: #666;">
+                    <div>נוצר: ${createdAt}</div>
+                    ${faq.approved ? `<div>אושר: ${approvedAt}</div>` : ''}
+                    ${faq.usage_count ? `<div>שימושים: ${faq.usage_count}</div>` : ''}
+                  </div>
+                  <div style="margin-top: 10px; display: flex; gap: 8px;">
+                    <button onclick="editAllFaq('${faq.id}')" 
+                            id="all_edit_btn_${faq.id}"
+                            style="padding: 6px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                      ✏️ ערוך
+                    </button>
+                    <button onclick="saveAllFaqEdit('${faq.id}')" 
+                            id="all_save_btn_${faq.id}"
+                            style="display: none; padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                      💾 שמור
+                    </button>
+                    <button onclick="cancelAllFaqEdit('${faq.id}')" 
+                            id="all_cancel_btn_${faq.id}"
+                            style="display: none; padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                      ✕ ביטול
+                    </button>
+                    <button onclick="deleteFaqConfirm('${faq.id}')" 
+                            style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                      🗑️ מחק
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        container.innerHTML = html;
+      } catch (error) {
+        container.innerHTML = `<p class="err">Error: ${error.message}</p>`;
+        console.error('Error loading all FAQs:', error);
+      }
+    }
+
+    function editAllFaq(faqId) {
+      // Show edit mode
+      document.getElementById(`all_faq_question_${faqId}_display`).style.display = 'none';
+      document.getElementById(`all_faq_question_${faqId}_edit`).style.display = 'block';
+      document.getElementById(`all_faq_answer_${faqId}_display`).style.display = 'none';
+      document.getElementById(`all_faq_answer_${faqId}_edit`).style.display = 'block';
+      
+      // Show/hide buttons
+      document.getElementById(`all_edit_btn_${faqId}`).style.display = 'none';
+      document.getElementById(`all_save_btn_${faqId}`).style.display = 'inline-block';
+      document.getElementById(`all_cancel_btn_${faqId}`).style.display = 'inline-block';
+    }
+
+    function cancelAllFaqEdit(faqId) {
+      // Hide edit mode
+      document.getElementById(`all_faq_question_${faqId}_display`).style.display = 'block';
+      document.getElementById(`all_faq_question_${faqId}_edit`).style.display = 'none';
+      document.getElementById(`all_faq_answer_${faqId}_display`).style.display = 'block';
+      document.getElementById(`all_faq_answer_${faqId}_edit`).style.display = 'none';
+      
+      // Show/hide buttons
+      document.getElementById(`all_edit_btn_${faqId}`).style.display = 'inline-block';
+      document.getElementById(`all_save_btn_${faqId}`).style.display = 'none';
+      document.getElementById(`all_cancel_btn_${faqId}`).style.display = 'none';
+      
+      // Reload to reset values
+      loadAllFaqs();
+    }
+
+    async function saveAllFaqEdit(faqId) {
+      const questionEl = document.getElementById(`all_faq_question_${faqId}_edit`);
+      const answerEl = document.getElementById(`all_faq_answer_${faqId}_edit`);
+      
+      if (!questionEl || !answerEl) {
+        alert('❌ שגיאה: לא נמצאו שדות עריכה');
+        return;
+      }
+      
+      const question = questionEl.value.trim();
+      const answer = answerEl.value.trim();
+      
+      if (!question || !answer) {
+        alert('❌ שאלה ותשובה הן שדות חובה');
+        return;
+      }
+
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        
+        const response = await fetch(`${apiBase}/admin/faq/${faqId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: question,
+            answer: answer
+          })
+        });
+
+        if (!response.ok) {
+          let errorDetail = 'Failed to update FAQ';
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData.detail || errorData.message || `HTTP ${response.status}`;
+          } catch (e) {
+            errorDetail = `HTTP ${response.status}: ${response.statusText}`;
+          }
+          throw new Error(errorDetail);
+        }
+
+        alert('✅ השינויים נשמרו בהצלחה!');
+        loadAllFaqs();
+      } catch (error) {
+        const errorMsg = error?.message || 'Unknown error';
+        alert(`❌ שגיאה בשמירה: ${errorMsg}`);
+        console.error('Error saving FAQ edit:', error);
+      }
+    }
+
+    async function deleteFaqConfirm(faqId) {
+      if (!confirm('האם אתה בטוח שברצונך למחוק FAQ זה? פעולה זו לא ניתנת לביטול.')) {
+        return;
+      }
+
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/faq/${faqId}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+
+        alert('✅ FAQ נמחק בהצלחה');
+        loadAllFaqs();
+        loadPendingFaqs();
+      } catch (error) {
+        alert(`❌ שגיאה במחיקת FAQ: ${error.message}`);
+        console.error('Error deleting FAQ:', error);
+      }
     }
 
     function showBookingsByStatus(status) {
@@ -2914,11 +3282,19 @@
     }
 
     async function saveFaqEdit(faqId) {
-      const question = document.getElementById(`faq_question_${faqId}_edit`).value.trim();
-      const answer = document.getElementById(`faq_answer_${faqId}_edit`).value.trim();
+      const questionEl = document.getElementById(`faq_question_${faqId}_edit`);
+      const answerEl = document.getElementById(`faq_answer_${faqId}_edit`);
+      
+      if (!questionEl || !answerEl) {
+        alert('❌ שגיאה: לא נמצאו שדות עריכה');
+        return;
+      }
+      
+      const question = questionEl.value.trim();
+      const answer = answerEl.value.trim();
       
       if (!question || !answer) {
-        alert('שאלה ותשובה הן שדות חובה');
+        alert('❌ שאלה ותשובה הן שדות חובה');
         return;
       }
 
@@ -2946,9 +3322,14 @@
           throw new Error(errorDetail);
         }
 
+        const result = await response.json();
+
         // Update display
-        document.getElementById(`faq_question_${faqId}_display`).textContent = question;
-        document.getElementById(`faq_answer_${faqId}_display`).textContent = answer;
+        const questionDisplay = document.getElementById(`faq_question_${faqId}_display`);
+        const answerDisplay = document.getElementById(`faq_answer_${faqId}_display`);
+        
+        if (questionDisplay) questionDisplay.textContent = question;
+        if (answerDisplay) answerDisplay.textContent = answer;
         
         // Store edited values for approval (if pending)
         window.faqEdits = window.faqEdits || {};
@@ -2961,7 +3342,8 @@
         loadPendingFaqs();
         loadAllFaqs();
       } catch (error) {
-        alert(`❌ שגיאה בשמירה: ${error.message}`);
+        const errorMsg = error?.message || 'Unknown error';
+        alert(`❌ שגיאה בשמירה: ${errorMsg}`);
         console.error('Error saving FAQ edit:', error);
       }
     }
@@ -2981,7 +3363,7 @@
         const body = {
           faq_id: faqId,
           approved: true,
-          approved_by: 'host' // TODO: Get actual host ID
+          approved_by: null // Will be set to NULL in DB (not a UUID requirement for now)
         };
         
         // If edited, include new question/answer
@@ -2998,7 +3380,18 @@
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
-          throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`);
+          const errorMsg = errorData.detail || errorData.message || `HTTP ${response.status}`;
+          
+          // Check if error message indicates FAQ is already approved
+          if (errorMsg.includes('already approved') || errorMsg.includes('כבר מאושר') || errorMsg.includes('already_approved')) {
+            alert('ℹ️ FAQ כבר מאושר ונשמר. אין צורך לאשר שוב.');
+            // Reload to show updated status
+            loadPendingFaqs();
+            loadAllFaqs();
+            return;
+          }
+          
+          throw new Error(errorMsg);
         }
 
         const result = await response.json();
@@ -3008,12 +3401,25 @@
           delete window.faqEdits[faqId];
         }
 
-        alert('✅ FAQ אושר בהצלחה! עכשיו הסוכן יוכל להשתמש בתשובה זו לשאלות דומות.');
+        // Check if FAQ was already approved
+        if (result.was_already_approved) {
+          alert('✅ ' + (result.message || 'FAQ כבר מאושר ונשמר!'));
+        } else {
+          alert('✅ FAQ אושר בהצלחה! עכשיו הסוכן יוכל להשתמש בתשובה זו לשאלות דומות.');
+        }
+        
         loadPendingFaqs();
         loadAllFaqs(); // Reload all FAQs to show updated status
       } catch (error) {
-        const errorMsg = error.message || 'Unknown error';
-        alert(`❌ שגיאה באישור FAQ: ${errorMsg}`);
+        const errorMsg = error?.message || 'Unknown error';
+        // Check if error message indicates FAQ is already approved
+        if (errorMsg.includes('already approved') || errorMsg.includes('כבר מאושר') || errorMsg.includes('already_approved')) {
+          alert('ℹ️ FAQ כבר מאושר ונשמר. אין צורך לאשר שוב.');
+          loadPendingFaqs();
+          loadAllFaqs();
+        } else {
+          alert(`❌ שגיאה באישור FAQ: ${errorMsg}`);
+        }
         console.error('Error approving FAQ:', error);
       }
     }
@@ -3114,7 +3520,7 @@
     }
 
     async function showAddFactModal() {
-      // Load categories
+      // Load categories from features catalog
       let categoriesMap = {};
       try {
         const catalogRes = await fetch('/data/features_catalog.json');
@@ -3128,19 +3534,118 @@
         console.warn('Could not load features catalog:', e);
       }
       
-      const key = prompt('הזן מפתח (fact_key):');
-      if (!key) return;
+      // Create modal HTML
+      const modalHtml = `
+        <div id="addFactModal" class="modal" style="display: block;">
+          <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeAddFactModal()">&times;</span>
+            <h2 style="margin-top: 0; color: #2196F3;">➕ הוסף Business Fact חדש</h2>
+            
+            <form id="addFactForm" onsubmit="event.preventDefault(); submitAddFact();">
+              <label><strong>מפתח (Fact Key):</strong></label>
+              <input type="text" id="newFactKey" required 
+                     placeholder="לדוגמה: check_in_time" 
+                     style="width: 100%; padding: 10px; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 6px;" />
+              
+              <label><strong>ערך (Fact Value):</strong></label>
+              <textarea id="newFactValue" required 
+                        placeholder="לדוגמה: 15:00" 
+                        style="width: 100%; padding: 10px; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 6px; min-height: 60px;"></textarea>
+              
+              <label><strong>קטגוריה:</strong></label>
+              <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <select id="newFactCategory" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 6px;">
+                  <option value="">בחר קטגוריה (אופציונלי)</option>
+                  ${Object.entries(categoriesMap).map(([id, label]) => 
+                    `<option value="${id}">${label} (${id})</option>`
+                  ).join('')}
+                  <option value="__NEW__">➕ הוסף קטגוריה חדשה</option>
+                </select>
+                <input type="text" id="newCategoryInput" placeholder="שם קטגוריה חדשה" 
+                       style="display: none; flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 6px;" />
+              </div>
+              
+              <label><strong>תיאור (אופציונלי):</strong></label>
+              <textarea id="newFactDescription" 
+                        placeholder="תיאור נוסף (אופציונלי)" 
+                        style="width: 100%; padding: 10px; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 6px; min-height: 40px;"></textarea>
+              
+              <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn-success" style="flex: 1; padding: 12px;">
+                  ✅ שמור
+                </button>
+                <button type="button" onclick="closeAddFactModal()" class="btn-danger" style="flex: 1; padding: 12px;">
+                  ✕ ביטול
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
       
-      const value = prompt('הזן ערך (fact_value):');
-      if (!value) return;
+      // Remove existing modal if exists
+      const existingModal = document.getElementById('addFactModal');
+      if (existingModal) {
+        existingModal.remove();
+      }
       
-      // Show category selection
-      const categoryOptions = Object.entries(categoriesMap).map(([id, label]) => `${id} - ${label}`).join('\n');
-      const categoryPrompt = `בחר קטגוריה:\n${categoryOptions}\n\nהזן ID של קטגוריה (או Enter לדילוג):`;
-      const categoryInput = prompt(categoryPrompt);
-      const category = categoryInput ? categoryInput.split(' - ')[0].trim() : null;
+      // Add modal to body
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
       
-      addBusinessFact(key, value, category);
+      // Handle category selection change
+      document.getElementById('newFactCategory').addEventListener('change', function() {
+        const newCategoryInput = document.getElementById('newCategoryInput');
+        if (this.value === '__NEW__') {
+          newCategoryInput.style.display = 'block';
+          newCategoryInput.required = true;
+        } else {
+          newCategoryInput.style.display = 'none';
+          newCategoryInput.required = false;
+          newCategoryInput.value = '';
+        }
+      });
+    }
+    
+    function closeAddFactModal() {
+      const modal = document.getElementById('addFactModal');
+      if (modal) {
+        modal.remove();
+      }
+    }
+    
+    async function submitAddFact() {
+      const key = document.getElementById('newFactKey').value.trim();
+      const value = document.getElementById('newFactValue').value.trim();
+      const categorySelect = document.getElementById('newFactCategory');
+      const newCategoryInput = document.getElementById('newCategoryInput');
+      const description = document.getElementById('newFactDescription').value.trim();
+      
+      if (!key || !value) {
+        alert('❌ מפתח וערך הם שדות חובה');
+        return;
+      }
+      
+      let category = categorySelect.value;
+      
+      // Handle new category
+      if (category === '__NEW__') {
+        const newCategoryName = newCategoryInput.value.trim();
+        if (!newCategoryName) {
+          alert('❌ אנא הזן שם קטגוריה חדשה');
+          return;
+        }
+        category = newCategoryName.toLowerCase().replace(/\s+/g, '_');
+        
+        // TODO: Add new category to features_catalog.json (future enhancement)
+        // For now, just use the category name as-is
+      }
+      
+      if (category === '') {
+        category = null;
+      }
+      
+      await addBusinessFact(key, value, category, description);
+      closeAddFactModal();
     }
 
     async function editFact(key, currentValue, currentCategory) {
@@ -3170,7 +3675,7 @@
       updateBusinessFact(key, newValue, category);
     }
 
-    async function addBusinessFact(key, value, category) {
+    async function addBusinessFact(key, value, category, description) {
       try {
         const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
         const response = await fetch(`${apiBase}/admin/business-facts`, {
@@ -3179,19 +3684,21 @@
           body: JSON.stringify({
             fact_key: key,
             fact_value: value,
-            category: category
+            category: category || null,
+            description: description || null
           })
         });
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.detail || `HTTP ${response.status}`);
+          throw new Error(error.detail || error.message || `HTTP ${response.status}`);
         }
 
         alert('✅ Business Fact נוסף בהצלחה!');
         loadBusinessFacts();
       } catch (error) {
-        alert(`❌ שגיאה בהוספת Fact: ${error.message}`);
+        const errorMsg = error?.message || 'Unknown error';
+        alert(`❌ שגיאה בהוספת Fact: ${errorMsg}`);
         console.error('Error adding business fact:', error);
       }
     }
@@ -3219,6 +3726,30 @@
       } catch (error) {
         alert(`❌ שגיאה בעדכון Fact: ${error.message}`);
         console.error('Error updating business fact:', error);
+      }
+    }
+
+    async function deleteBusinessFact(key) {
+      if (!confirm(`האם אתה בטוח שברצונך למחוק את Business Fact הזה?\n\nKey: ${key}`)) {
+        return;
+      }
+
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/business-facts/${encodeURIComponent(key)}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+
+        alert('✅ Business Fact נמחק בהצלחה');
+        loadBusinessFacts();
+      } catch (error) {
+        alert(`❌ שגיאה במחיקת Business Fact: ${error.message}`);
+        console.error('Error deleting business fact:', error);
       }
     }
 
@@ -3323,6 +3854,382 @@
       }
     }
 
+    // Sync Functions
+    function addSyncLog(message, type = 'info') {
+      const logDiv = document.getElementById('syncLog');
+      if (!logDiv) return;
+      
+      const timestamp = new Date().toLocaleString('he-IL');
+      const color = type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : type === 'warning' ? '#ff9800' : '#2196F3';
+      const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+      
+      // Remove "no sync yet" message if exists
+      if (logDiv.children.length === 1 && logDiv.children[0].textContent.includes('אין פעולות')) {
+        logDiv.innerHTML = '';
+      }
+      
+      const logEntry = document.createElement('div');
+      logEntry.style.cssText = `margin-bottom: 8px; padding: 8px; background: ${type === 'error' ? '#ffebee' : type === 'success' ? '#e8f5e9' : '#e3f2fd'}; border-radius: 4px; border-right: 3px solid ${color};`;
+      logEntry.innerHTML = `<strong style="color: ${color};">${icon} [${timestamp}]</strong> ${message}`;
+      
+      logDiv.insertBefore(logEntry, logDiv.firstChild);
+      
+      // Keep only last 50 entries
+      while (logDiv.children.length > 50) {
+        logDiv.removeChild(logDiv.lastChild);
+      }
+      
+      logDiv.scrollTop = 0;
+    }
+
+    function loadSyncStatus() {
+      // Just clear results and show sync tab
+      document.getElementById('syncSheetsToDbResult').style.display = 'none';
+      document.getElementById('syncDbToSheetsResult').style.display = 'none';
+      document.getElementById('syncCalendarToDbResult').style.display = 'none';
+      document.getElementById('syncDbToCalendarResult').style.display = 'none';
+      
+      // Load auto-sync status
+      loadAutoSyncStatus();
+    }
+    
+    async function loadAutoSyncStatus() {
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/sync/auto-status`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const status = await response.json();
+        
+        // Update UI
+        const statusSpan = document.getElementById('autoSyncStatus');
+        const toggleBtn = document.getElementById('toggleAutoSyncBtn');
+        const nextRunSpan = document.getElementById('autoSyncNextRun');
+        const intervalSpan = document.getElementById('autoSyncInterval');
+        
+        if (statusSpan) {
+          if (status.enabled && status.scheduler_running) {
+            statusSpan.innerHTML = '🟢 פעיל';
+            statusSpan.style.color = '#2e7d32';
+          } else {
+            statusSpan.innerHTML = '🔴 מושבת';
+            statusSpan.style.color = '#d32f2f';
+          }
+        }
+        
+        if (toggleBtn) {
+          if (status.enabled) {
+            toggleBtn.innerHTML = '⏸️ עצור סנכרון אוטומטי';
+            toggleBtn.style.background = '#f44336';
+          } else {
+            toggleBtn.innerHTML = '▶️ הפעל סנכרון אוטומטי';
+            toggleBtn.style.background = '#4CAF50';
+          }
+        }
+        
+        if (intervalSpan) {
+          intervalSpan.textContent = status.interval_minutes || 5;
+        }
+        
+        if (nextRunSpan && status.next_run_time) {
+          const nextRun = new Date(status.next_run_time);
+          const now = new Date();
+          const diffMinutes = Math.round((nextRun - now) / (1000 * 60));
+          
+          if (diffMinutes > 0) {
+            nextRunSpan.textContent = `⏰ סנכרון הבא בעוד ${diffMinutes} דקות (${nextRun.toLocaleString('he-IL')})`;
+          } else {
+            nextRunSpan.textContent = '⏰ סנכרון הבא בקרוב...';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading auto-sync status:', error);
+        // If endpoint doesn't exist yet, show default state
+        const statusSpan = document.getElementById('autoSyncStatus');
+        if (statusSpan) {
+          statusSpan.innerHTML = '⚪ לא זמין';
+          statusSpan.style.color = '#757575';
+        }
+      }
+    }
+    
+    async function toggleAutoSync() {
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/sync/auto-toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Reload status to update UI
+        await loadAutoSyncStatus();
+        
+        addSyncLog(result.message || `סנכרון אוטומטי ${result.enabled ? 'הופעל' : 'הושבת'}`, result.enabled ? 'success' : 'warning');
+        
+      } catch (error) {
+        console.error('Error toggling auto-sync:', error);
+        alert(`שגיאה בשינוי סטטוס סנכרון אוטומטי: ${error.message}`);
+      }
+    }
+
+    async function syncSheetsToDb() {
+      const resultDiv = document.getElementById('syncSheetsToDbResult');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div style="color: #2196F3;">⏳ מסנכרן... זה עשוי לקחת כמה שניות...</div>';
+      addSyncLog('מתחיל סנכרון Sheets → DB...', 'info');
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/sync/sheets-to-db`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          resultDiv.innerHTML = `<div style="color: #4CAF50; padding: 10px; background: #e8f5e9; border-radius: 6px; border: 2px solid #4CAF50;">
+            ✅ <strong>סנכרון הושלם בהצלחה!</strong><br/>
+            • הועתקו: ${result.imported || 0}<br/>
+            • עודכנו: ${result.updated || 0}<br/>
+            • שגיאות: ${result.errors || 0}
+          </div>`;
+          addSyncLog(`✅ Sheets → DB: ${result.imported || 0} הועתקו, ${result.updated || 0} עודכנו`, 'success');
+        } else {
+          let errorDetails = '';
+          if (result.error_list && result.error_list.length > 0) {
+            errorDetails = '<br/><br/><strong>פרטי שגיאות (5 ראשונות):</strong><ul style="text-align: right; margin: 8px 0; padding-right: 20px;">';
+            result.error_list.slice(0, 5).forEach((err, idx) => {
+              errorDetails += `<li style="margin: 4px 0; color: #d32f2f;">[${err.type || 'unknown'}] ${err.cabin ? err.cabin + ': ' : ''}${err.error || 'Unknown error'}</li>`;
+            });
+            errorDetails += '</ul>';
+            if (result.error_list.length > 5) {
+              errorDetails += `<small style="color: #666;">...ועוד ${result.error_list.length - 5} שגיאות (בדוק את הקונסול לרשימה מלאה)</small>`;
+            }
+          }
+          
+          resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+            ⚠️ <strong>סנכרון הושלם עם שגיאות:</strong><br/>
+            • הועתקו: ${result.imported || 0}<br/>
+            • עודכנו: ${result.updated || 0}<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}${errorDetails}
+            <br/><strong>💡 טיפ:</strong> בדוק את הקונסול (F12) לראות פרטי שגיאות מלאים. השגיאות גם מודפסות בטרמינל של FastAPI server.
+          </div>`;
+          addSyncLog(`⚠️ Sheets → DB: ${result.errors || 0} שגיאות (${result.imported || 0} הועתקו, ${result.updated || 0} עודכנו)`, 'warning');
+          
+          // Log errors to console for debugging
+          if (result.error_list && result.error_list.length > 0) {
+            console.group('📋 Sheets → DB Errors:');
+            result.error_list.forEach((err, idx) => {
+              console.error(`${idx + 1}. [${err.type || 'unknown'}]`, err);
+            });
+            console.groupEnd();
+          }
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+          ❌ <strong>שגיאה בסנכרון:</strong><br/>
+          ${error.message || error}
+        </div>`;
+        addSyncLog(`❌ שגיאה בסנכרון Sheets → DB: ${error.message || error}`, 'error');
+        console.error('Error syncing Sheets to DB:', error);
+      }
+    }
+
+    async function syncDbToSheets() {
+      const resultDiv = document.getElementById('syncDbToSheetsResult');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div style="color: #4CAF50;">⏳ מסנכרן... זה עשוי לקחת כמה שניות...</div>';
+      addSyncLog('מתחיל סנכרון DB → Sheets...', 'info');
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/sync/db-to-sheets`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          resultDiv.innerHTML = `<div style="color: #4CAF50; padding: 10px; background: #e8f5e9; border-radius: 6px; border: 2px solid #4CAF50;">
+            ✅ <strong>סנכרון הושלם בהצלחה!</strong><br/>
+            • עודכנו: ${result.updated || 0} שורות<br/>
+            • שגיאות: ${result.errors || 0}
+          </div>`;
+          addSyncLog(`✅ DB → Sheets: ${result.updated || 0} שורות עודכנו`, 'success');
+        } else {
+          resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+            ⚠️ <strong>סנכרון הושלם עם שגיאות:</strong><br/>
+            • עודכנו: ${result.updated || 0} שורות<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}
+          </div>`;
+          addSyncLog(`⚠️ DB → Sheets: ${result.errors || 0} שגיאות`, 'warning');
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+          ❌ <strong>שגיאה בסנכרון:</strong><br/>
+          ${error.message || error}
+        </div>`;
+        addSyncLog(`❌ שגיאה בסנכרון DB → Sheets: ${error.message || error}`, 'error');
+        console.error('Error syncing DB to Sheets:', error);
+      }
+    }
+
+    async function syncCalendarToDb() {
+      const resultDiv = document.getElementById('syncCalendarToDbResult');
+      const daysBack = parseInt(document.getElementById('syncDaysBack').value) || 30;
+      const daysForward = parseInt(document.getElementById('syncDaysForward').value) || 365;
+      
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = `<div style="color: #ff9800;">⏳ מסנכרן Calendar → DB... זה עשוי לקחת זמן (בודק ${daysBack} יום אחורה + ${daysForward} יום קדימה)...</div>`;
+      addSyncLog(`מתחיל סנכרון Calendar → DB (${daysBack} יום אחורה, ${daysForward} יום קדימה)...`, 'info');
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const response = await fetch(`${apiBase}/admin/sync/calendar-to-db?days_back=${daysBack}&days_forward=${daysForward}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          resultDiv.innerHTML = `<div style="color: #4CAF50; padding: 10px; background: #e8f5e9; border-radius: 6px; border: 2px solid #4CAF50;">
+            ✅ <strong>סנכרון הושלם בהצלחה!</strong><br/>
+            • הועתקו: ${result.imported || 0} הזמנות חדשות<br/>
+            • עודכנו: ${result.updated || 0} הזמנות קיימות<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}
+          </div>`;
+          addSyncLog(`✅ Calendar → DB: ${result.imported || 0} הועתקו, ${result.updated || 0} עודכנו`, 'success');
+          
+          // Reload bookings if on bookings tab
+          if (document.getElementById('adminBookings').style.display !== 'none') {
+            setTimeout(() => loadBookings(), 1000);
+          }
+        } else {
+          let errorDetails = '';
+          if (result.error_list && result.error_list.length > 0) {
+            errorDetails = '<br/><br/><strong>פרטי שגיאות (5 ראשונות):</strong><ul style="text-align: right; margin: 8px 0; padding-right: 20px;">';
+            result.error_list.slice(0, 5).forEach((err, idx) => {
+              errorDetails += `<li style="margin: 4px 0; color: #d32f2f;">[${err.type || 'unknown'}] ${err.cabin ? err.cabin + ': ' : ''}${err.event_id ? 'Event ' + err.event_id + ': ' : ''}${err.error || 'Unknown error'}</li>`;
+            });
+            errorDetails += '</ul>';
+            if (result.error_list.length > 5) {
+              errorDetails += `<small style="color: #666;">...ועוד ${result.error_list.length - 5} שגיאות (בדוק את הקונסול לרשימה מלאה)</small>`;
+            }
+          }
+          
+          resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+            ⚠️ <strong>סנכרון הושלם עם שגיאות:</strong><br/>
+            • הועתקו: ${result.imported || 0}<br/>
+            • עודכנו: ${result.updated || 0}<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}${errorDetails}
+            <br/><strong>💡 טיפ:</strong> בדוק את הקונסול (F12) לראות פרטי שגיאות מלאים. השגיאות גם מודפסות בטרמינל של FastAPI server.
+          </div>`;
+          addSyncLog(`⚠️ Calendar → DB: ${result.errors || 0} שגיאות (${result.imported || 0} הועתקו, ${result.updated || 0} עודכנו)`, 'warning');
+          
+          // Log errors to console for debugging
+          if (result.error_list && result.error_list.length > 0) {
+            console.group('📋 Calendar → DB Errors:');
+            result.error_list.forEach((err, idx) => {
+              console.error(`${idx + 1}. [${err.type || 'unknown'}]`, err);
+            });
+            console.groupEnd();
+          }
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+          ❌ <strong>שגיאה בסנכרון:</strong><br/>
+          ${error.message || error}<br/>
+          <strong>💡 טיפ:</strong> בדוק את הקונסול (F12) לראות פרטי שגיאה מפורטים
+        </div>`;
+        addSyncLog(`❌ שגיאה בסנכרון Calendar → DB: ${error.message || error}`, 'error');
+        console.error('Error syncing Calendar to DB:', error);
+      }
+    }
+
+    async function syncDbToCalendar() {
+      const resultDiv = document.getElementById('syncDbToCalendarResult');
+      const bookingId = document.getElementById('syncBookingId').value.trim() || null;
+      
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div style="color: #9c27b0;">⏳ מסנכרן DB → Calendar... זה עשוי לקחת כמה שניות...</div>';
+      addSyncLog(`מתחיל סנכרון DB → Calendar${bookingId ? ` (Booking ID: ${bookingId})` : ' (כל ההזמנות)'}...`, 'info');
+      
+      try {
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : ADMIN_API_BASE;
+        const url = `${apiBase}/admin/sync/db-to-calendar${bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : ''}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          resultDiv.innerHTML = `<div style="color: #4CAF50; padding: 10px; background: #e8f5e9; border-radius: 6px; border: 2px solid #4CAF50;">
+            ✅ <strong>סנכרון הושלם בהצלחה!</strong><br/>
+            • עודכנו: ${result.updated || 0} אירועים ב-Calendar<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}
+          </div>`;
+          addSyncLog(`✅ DB → Calendar: ${result.updated || 0} אירועים עודכנו`, 'success');
+        } else {
+          resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+            ⚠️ <strong>סנכרון הושלם עם שגיאות:</strong><br/>
+            • עודכנו: ${result.updated || 0} אירועים<br/>
+            • שגיאות: ${result.errors || 0}<br/>
+            ${result.message || ''}<br/>
+            <strong>💡 טיפ:</strong> בדוק את הקונסול (F12) לראות פרטי שגיאות
+          </div>`;
+          addSyncLog(`⚠️ DB → Calendar: ${result.errors || 0} שגיאות`, 'warning');
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div style="color: #f44336; padding: 10px; background: #ffebee; border-radius: 6px; border: 2px solid #f44336;">
+          ❌ <strong>שגיאה בסנכרון:</strong><br/>
+          ${error.message || error}<br/>
+          <strong>💡 טיפ:</strong> בדוק את הקונסול (F12) לראות פרטי שגיאה מפורטים
+        </div>`;
+        addSyncLog(`❌ שגיאה בסנכרון DB → Calendar: ${error.message || error}`, 'error');
+        console.error('Error syncing DB to Calendar:', error);
+      }
+    }
+
     // Agent Chat Variables
     let currentAgentConversationId = null;
     let agentChatHistory = [];
@@ -3336,6 +4243,8 @@
         if (currentAgentConversationId) {
           loadConversationHistory();
         }
+      } else {
+        console.error('Agent chat modal not found!');
       }
     }
 
@@ -3421,6 +4330,41 @@
       }
     }
 
+    // Convert markdown links to HTML clickable links
+    function convertMarkdownToHtml(text) {
+      if (!text) return '';
+      
+      // Escape existing HTML to prevent XSS, but we'll add it back for links
+      let html = String(text);
+      
+      // First convert **bold** to <strong> (before processing single *)
+      html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+      
+      // Then convert *italic* to <em> (only if not part of **bold**)
+      html = html.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
+      
+      // Convert markdown links [text](url) to HTML <a> tags
+      // This regex handles links with proper escaping
+      html = html.replace(/\[([^\]]+?)\]\(([^)]+?)\)/g, function(match, linkText, url) {
+        // Escape HTML in link text to prevent XSS (but preserve emojis and special chars)
+        const escapedText = linkText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+        // URL is already URL-encoded, just escape quotes
+        const escapedUrl = url
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#x27;');
+        return `<a href="${escapedUrl}" target="_blank" style="color: #1976d2; text-decoration: underline; cursor: pointer; font-weight: 500;" rel="noopener noreferrer" onmouseover="this.style.color='#0d47a1';" onmouseout="this.style.color='#1976d2';">${escapedText}</a>`;
+      });
+      
+      // Convert newlines to <br> (after processing links to avoid breaking them)
+      html = html.replace(/\n/g, '<br>');
+      
+      return html;
+    }
+
     function addMessageToHistory(role, content, isTemporary = false, isError = false) {
       const historyDiv = document.getElementById('agentChatHistory');
       const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -3437,11 +4381,13 @@
       `;
       
       const roleLabel = role === 'user' ? '👤 אתה' : '🤖 סוכן';
+      // Convert markdown to HTML for clickable links
+      const contentHtml = convertMarkdownToHtml(content);
       messageDiv.innerHTML = `
         <div style="font-weight: bold; margin-bottom: 5px; color: ${role === 'user' ? '#1976d2' : '#4CAF50'};">
           ${roleLabel}
         </div>
-        <div style="white-space: pre-wrap; word-wrap: break-word;">${content}</div>
+        <div style="word-wrap: break-word; line-height: 1.6;">${contentHtml}</div>
       `;
 
       // אם אין הודעות, הסר את ההודעה הריקה
@@ -3480,7 +4426,8 @@
       }
       // Remove image URL lines from text
       answerText = answerText.replace(/🖼️\s*\/zimmers_pic\/[^\s\n<>"]+/g, '');
-      answerHtml = answerText.replace(/\n/g, '<br>');
+      // Convert markdown to HTML (including links)
+      answerHtml = convertMarkdownToHtml(answerText);
       
       // Add images if found
       if (imageUrls.length > 0) {
@@ -3527,6 +4474,31 @@
         : 'אין actions';
       document.getElementById('agentResponseConfidence').textContent = 
         (result.confidence ? (result.confidence * 100).toFixed(1) : '0') + '%';
+      
+      // Display booking_flow info if available (single unified block)
+      const bookingFlowInfoDiv = document.getElementById('bookingFlowInfo');
+      if (result.booking_flow || result.show_customer_form !== undefined) {
+        if (bookingFlowInfoDiv) {
+          bookingFlowInfoDiv.style.display = 'block';
+          if (result.booking_flow) {
+            document.getElementById('bookingFlowDetails').textContent = JSON.stringify(result.booking_flow, null, 2);
+          } else {
+            document.getElementById('bookingFlowDetails').textContent = 'אין booking_flow state';
+          }
+          document.getElementById('showCustomerFormFlag').textContent = result.show_customer_form === true ? '✅ כן (true) - צריך להציג טופס פרטי לקוח' : '❌ לא (false)';
+          
+          // TODO: Show customer details form if show_customer_form === true (will be implemented in next step)
+          if (result.show_customer_form === true) {
+            console.log('Should show customer form. booking_flow:', result.booking_flow);
+            // For now, just log - will be implemented later
+          }
+        }
+      } else {
+        if (bookingFlowInfoDiv) {
+          bookingFlowInfoDiv.style.display = 'none';
+        }
+      }
+      
       responseDiv.style.display = 'block';
     }
 
@@ -3581,37 +4553,75 @@
       }
     }
 
-    // Initialize admin button and agent chat button
-    document.addEventListener('DOMContentLoaded', function() {
-      const adminBtn = document.getElementById('adminBtn');
-      if (adminBtn) {
-        adminBtn.addEventListener('click', () => {
+    // Function to open Admin Panel
+    function openAdminModal() {
           const modal = document.getElementById('adminModal');
           if (modal) {
             modal.style.display = 'block';
             loadBookings();
-          }
+      } else {
+        console.error('Admin modal not found!');
+      }
+    }
+
+    // Initialize admin button and agent chat button
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOMContentLoaded - Initializing buttons...');
+      
+      const adminBtn = document.getElementById('adminBtn');
+      if (adminBtn) {
+        console.log('Admin button found, adding listener...');
+        adminBtn.addEventListener('click', function() {
+          console.log('Admin button clicked!');
+          openAdminModal();
         });
+      } else {
+        console.error('Admin button not found!');
       }
 
       const agentChatBtn = document.getElementById('agentChatBtn');
       if (agentChatBtn) {
-        agentChatBtn.addEventListener('click', () => {
+        console.log('Agent chat button found, adding listener...');
+        agentChatBtn.addEventListener('click', function() {
+          console.log('Agent chat button clicked!');
           openAgentChatModal();
         });
+      } else {
+        console.error('Agent chat button not found!');
       }
 
-      // Close modals when clicking outside
+      // Close modals when clicking outside (extend existing window.onclick handler)
+      const existingOnClick = window.onclick;
+      if (existingOnClick) {
       window.onclick = function(event) {
-        const adminModal = document.getElementById('adminModal');
-        if (event.target == adminModal) {
-          adminModal.style.display = 'none';
-        }
-        const agentChatModal = document.getElementById('agentChatModal');
-        if (event.target == agentChatModal) {
-          agentChatModal.style.display = 'none';
-        }
+          // Call existing onclick handler (for bookingModal and paymentModal)
+          existingOnClick.call(this, event);
+          
+          // Handle admin and agent chat modals
+          const adminModal = document.getElementById('adminModal');
+          if (adminModal && event.target === adminModal) {
+            adminModal.style.display = 'none';
+          }
+          const agentChatModal = document.getElementById('agentChatModal');
+          if (agentChatModal && event.target === agentChatModal) {
+            agentChatModal.style.display = 'none';
+          }
+        };
+      } else {
+        // If no existing handler, just handle admin and agent chat modals
+        window.onclick = function(event) {
+          const adminModal = document.getElementById('adminModal');
+          if (adminModal && event.target === adminModal) {
+            adminModal.style.display = 'none';
+          }
+          const agentChatModal = document.getElementById('agentChatModal');
+          if (agentChatModal && event.target === agentChatModal) {
+            agentChatModal.style.display = 'none';
+          }
+        };
       }
+      
+      console.log('Button initialization complete!');
     });
   </script>
 
@@ -3626,6 +4636,7 @@
         <button id="tabAudit" class="admin-tab" onclick="switchAdminTab('audit')">Audit Log</button>
         <button id="tabStats" class="admin-tab" onclick="switchAdminTab('stats')">Statistics</button>
         <button id="tabFaq" class="admin-tab" onclick="switchAdminTab('faq')">FAQ & Facts</button>
+        <button id="tabSync" class="admin-tab" onclick="switchAdminTab('sync')">🔄 Sync</button>
       </div>
 
       <div id="adminContent">
@@ -3722,6 +4733,121 @@
             </div>
           </div>
         </div>
+
+        <!-- Sync Tab -->
+        <div id="adminSync" class="admin-tab-content" style="display: none;">
+          <h3>🔄 סנכרון נתונים</h3>
+          <p style="color: #666; margin-bottom: 20px; font-size: 14px; background: #f0f0f0; padding: 15px; border-radius: 6px;">
+            <strong>מה זה סנכרון?</strong><br/>
+            סנכרון דו-כיווני בין Google Sheets ↔ DB ו-Google Calendar ↔ DB<br/>
+            • <strong>Sheets → DB:</strong> מעדכן את ה-DB עם נתונים מ-Google Sheets (צימרים חדשים, שינויים)<br/>
+            • <strong>DB → Sheets:</strong> מעדכן את Google Sheets עם נתונים מה-DB<br/>
+            • <strong>Calendar → DB:</strong> מזהה שינויים ב-Google Calendar ומעדכן את ה-DB (שם, מייל, תאריכים)<br/>
+            • <strong>DB → Calendar:</strong> מעדכן אירועים ב-Google Calendar עם שינויים מה-DB<br/>
+            <strong>💡 טיפ:</strong> הפעל סנכרון Calendar → DB כדי לראות שינויים שעשית ביומן!
+          </p>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <!-- Sheets → DB -->
+            <div class="card" style="border: 2px solid #2196F3;">
+              <h4 style="color: #1976d2; margin-top: 0;">📊 Google Sheets → DB</h4>
+              <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                מעתיק צימרים מ-Google Sheets ל-DB<br/>
+                <strong>מתי להשתמש:</strong> כשמוסיפים צימרים חדשים או משנים מידע ב-Sheets
+              </p>
+              <button onclick="syncSheetsToDb()" class="btn-primary" style="width: 100%; padding: 12px;">
+                🔄 סנכרן Sheets → DB
+              </button>
+              <div id="syncSheetsToDbResult" style="margin-top: 10px; font-size: 12px; display: none;"></div>
+            </div>
+
+            <!-- DB → Sheets -->
+            <div class="card" style="border: 2px solid #4CAF50;">
+              <h4 style="color: #2e7d32; margin-top: 0;">💾 DB → Google Sheets</h4>
+              <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                מעתיק צימרים מה-DB ל-Google Sheets<br/>
+                <strong>מתי להשתמש:</strong> כשמשנים מידע ב-DB ורוצים לעדכן את Sheets
+              </p>
+              <button onclick="syncDbToSheets()" class="btn-success" style="width: 100%; padding: 12px;">
+                🔄 סנכרן DB → Sheets
+              </button>
+              <div id="syncDbToSheetsResult" style="margin-top: 10px; font-size: 12px; display: none;"></div>
+            </div>
+
+            <!-- Calendar → DB -->
+            <div class="card" style="border: 2px solid #ff9800;">
+              <h4 style="color: #f57c00; margin-top: 0;">📅 Google Calendar → DB</h4>
+              <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                מזהה שינויים ב-Google Calendar ומעדכן את ה-DB<br/>
+                <strong>מתי להשתמש:</strong> כשעושים שינוי ביומן (שם, מייל, תאריכים) ורוצים לסנכרן ל-DB<br/>
+                <strong>⚠️ חשוב:</strong> בודק את 30 יום האחרונים + 365 יום קדימה (ניתן לשנות)
+              </p>
+              <div style="margin-bottom: 10px;">
+                <label style="font-size: 12px;">ימים אחורה:</label>
+                <input type="number" id="syncDaysBack" value="30" min="1" max="365" style="width: 80px; padding: 4px; margin-right: 10px;" />
+                <label style="font-size: 12px;">ימים קדימה:</label>
+                <input type="number" id="syncDaysForward" value="365" min="1" max="730" style="width: 80px; padding: 4px;" />
+              </div>
+              <button onclick="syncCalendarToDb()" class="btn-success" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                🔄 סנכרן Calendar → DB
+              </button>
+              <div id="syncCalendarToDbResult" style="margin-top: 10px; font-size: 12px; display: none;"></div>
+            </div>
+
+            <!-- DB → Calendar -->
+            <div class="card" style="border: 2px solid #9c27b0;">
+              <h4 style="color: #7b1fa2; margin-top: 0;">📅 DB → Google Calendar</h4>
+              <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                מעדכן אירועים ב-Google Calendar עם שינויים מה-DB<br/>
+                <strong>מתי להשתמש:</strong> כשמשנים הזמנה ב-DB ורוצים לעדכן את Calendar<br/>
+                <strong>⚠️ הערה:</strong> ניתן לסנכרן הזמנה ספציפית (הכנס Booking ID) או את כל ההזמנות
+              </p>
+              <div style="margin-bottom: 10px;">
+                <label style="font-size: 12px;">Booking ID (אופציונלי):</label>
+                <input type="text" id="syncBookingId" placeholder="השאר ריק לכל ההזמנות" style="width: 100%; padding: 6px; margin-top: 5px; font-size: 12px;" />
+              </div>
+              <button onclick="syncDbToCalendar()" class="btn-success" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);">
+                🔄 סנכרן DB → Calendar
+              </button>
+              <div id="syncDbToCalendarResult" style="margin-top: 10px; font-size: 12px; display: none;"></div>
+            </div>
+          </div>
+
+          <!-- Auto-Sync Status & Control -->
+          <div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border: 2px solid #2196F3;">
+            <h3 style="margin-top: 0; color: #1976d2;">🤖 סנכרון אוטומטי</h3>
+            <p style="font-size: 13px; color: #555; margin-bottom: 15px;">
+              הסנכרון האוטומטי רץ ברקע כל <strong id="autoSyncInterval">5</strong> דקות ומעדכן אוטומטית:
+              <br/>• <strong>Calendar → DB:</strong> מזהה שינויים ביומנים (שם, מייל, תאריכים) ומעדכן את ה-DB
+              <br/>• <strong>Sheets → DB:</strong> מזהה שינויים ב-Google Sheets (צימרים חדשים, עדכונים) ומעדכן את ה-DB
+            </p>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+              <span id="autoSyncStatus" style="font-size: 14px; font-weight: bold; color: #2e7d32;">🟢 פעיל</span>
+              <button onclick="toggleAutoSync()" id="toggleAutoSyncBtn" class="btn-primary" style="padding: 8px 16px;">
+                ⏸️ עצור סנכרון אוטומטי
+              </button>
+              <span id="autoSyncNextRun" style="font-size: 12px; color: #666; margin-left: 10px;"></span>
+            </div>
+            <div style="background: white; padding: 10px; border-radius: 4px; font-size: 12px; color: #333;">
+              <strong>💡 למה כפתורי הסנכרון הידניים שימושיים?</strong>
+              <ul style="margin: 10px 0; padding-right: 20px; color: #555;">
+                <li><strong>סנכרון מיידי:</strong> כשצריך לעדכן עכשיו ולא לחכות 5 דקות</li>
+                <li><strong>בדיקות:</strong> לבדוק שינויים ספציפיים או לפתור בעיות</li>
+                <li><strong>התאוששות:</strong> אחרי בעיה, לסנכרן מחדש ידנית</li>
+                <li><strong>בקרה:</strong> לסנכרן רק לכיוון אחד (Sheets → DB או DB → Calendar)</li>
+                <li><strong>טווח תאריכים מותאם:</strong> לסנכרן תקופה ספציפית (לא רק 30 יום אחורה)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Sync Log -->
+          <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px; border: 2px solid #ddd;">
+            <h4 style="margin-top: 0; color: #333;">📋 יומן סנכרון אחרון:</h4>
+            <div id="syncLog" style="max-height: 300px; overflow-y: auto; background: white; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+              <div style="color: #666; font-style: italic;">אין פעולות סנכרון עדיין. הפעל סנכרון כדי לראות תוצאות כאן.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3798,6 +4924,16 @@
       </div>
     </div>
   </div>
+  
+  <!-- Booking Edit Modal -->
+  <div id="bookingEditModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 800px;">
+      <span class="close" onclick="closeBookingEditModal()">&times;</span>
+      <div id="bookingEditContent">
+        <p>טוען...</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Agent Chat Modal -->
   <div id="agentChatModal" class="modal" style="display: none;">
@@ -3849,6 +4985,33 @@
         </div>
       </div>
 
+      <!-- תצוגת תשובה מפורטת - הוזז למעלה, אחרי הצ'אט -->
+      <div id="agentChatResponse" style="display: none; margin-top: 15px; margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
+        <h3 style="margin-top: 0; color: #1976d2;">📊 פרטי התגובה:</h3>
+        <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+          <strong>תשובה:</strong>
+          <div id="agentResponseAnswer" style="margin-top: 5px; padding: 10px; background: #f5f5f5; border-radius: 4px; white-space: pre-wrap;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div style="background: white; padding: 10px; border-radius: 6px;">
+            <strong>Actions Suggested:</strong>
+            <div id="agentResponseActions" style="margin-top: 5px; color: #2196F3;"></div>
+          </div>
+          <div style="background: white; padding: 10px; border-radius: 6px;">
+            <strong>Confidence:</strong>
+            <div id="agentResponseConfidence" style="margin-top: 5px; color: #4CAF50; font-weight: bold;"></div>
+          </div>
+        </div>
+        <div style="margin-top: 10px; background: white; padding: 10px; border-radius: 6px; display: none;" id="bookingFlowInfo">
+          <strong>Booking Flow State:</strong>
+          <pre id="bookingFlowDetails" style="margin-top: 5px; font-size: 11px; color: #666; background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto; max-height: 200px; overflow-y: auto;"></pre>
+          <div style="margin-top: 8px;">
+            <strong>Show Customer Form:</strong>
+            <span id="showCustomerFormFlag" style="margin-right: 8px; color: #4CAF50; font-weight: bold;"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- טופס כתיבת הודעה -->
       <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 2px solid #4CAF50;">
         <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2e7d32;">💬 כתוב הודעה:</label>
@@ -3893,25 +5056,6 @@
                 style="width: 100%; margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);">
           📤 שלח הודעה
         </button>
-      </div>
-
-      <!-- תצוגת תשובה מפורטת -->
-      <div id="agentChatResponse" style="display: none; margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
-        <h3 style="margin-top: 0; color: #1976d2;">📊 פרטי התגובה:</h3>
-        <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-          <strong>תשובה:</strong>
-          <div id="agentResponseAnswer" style="margin-top: 5px; padding: 10px; background: #f5f5f5; border-radius: 4px; white-space: pre-wrap;"></div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div style="background: white; padding: 10px; border-radius: 6px;">
-            <strong>Actions Suggested:</strong>
-            <div id="agentResponseActions" style="margin-top: 5px; color: #2196F3;"></div>
-          </div>
-          <div style="background: white; padding: 10px; border-radius: 6px;">
-            <strong>Confidence:</strong>
-            <div id="agentResponseConfidence" style="margin-top: 5px; color: #4CAF50; font-weight: bold;"></div>
-          </div>
-        </div>
       </div>
 
       <!-- מידע על שמירה ב-DB -->

@@ -1517,6 +1517,282 @@ async def get_booking_by_id(booking_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching booking: {str(e)}")
 
 
+@app.put("/admin/bookings/{booking_id}")
+async def update_booking(booking_id: str, booking_update: dict):
+    """
+    Update booking details (admin endpoint)
+    """
+    try:
+        from src.db import get_db_connection, save_customer_to_db
+        from psycopg2.extras import RealDictCursor
+        import uuid
+        from datetime import datetime
+        
+        # Validate UUID
+        try:
+            uuid.UUID(booking_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid booking ID format")
+        
+        # Extract update data
+        customer_name = booking_update.get('customer_name')
+        customer_email = booking_update.get('customer_email')
+        customer_phone = booking_update.get('customer_phone')
+        cabin_id_input = booking_update.get('cabin_id')  # Can be UUID or cabin_id_string (ZB01, ZB02)
+        check_in = booking_update.get('check_in')
+        check_out = booking_update.get('check_out')
+        adults = booking_update.get('adults', 0)
+        kids = booking_update.get('kids', 0)
+        total_price = booking_update.get('total_price', 0)
+        status = booking_update.get('status')
+        
+        if not customer_name:
+            raise HTTPException(status_code=400, detail="customer_name is required")
+        if not cabin_id_input:
+            raise HTTPException(status_code=400, detail="cabin_id is required")
+        if not check_in or not check_out:
+            raise HTTPException(status_code=400, detail="check_in and check_out are required")
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # Convert cabin_id_input (could be UUID or cabin_id_string like ZB01) to UUID
+            cabin_uuid = None
+            new_calendar_id = None
+            try:
+                # Try to validate as UUID first
+                import uuid as uuid_lib
+                uuid_lib.UUID(cabin_id_input)
+                cabin_uuid = cabin_id_input
+                # Get calendar_id for this cabin
+                cursor.execute("""
+                    SELECT calendar_id FROM cabins WHERE id = %s::uuid
+                """, (cabin_uuid,))
+                cabin_row = cursor.fetchone()
+                if cabin_row:
+                    new_calendar_id = cabin_row['calendar_id']
+            except (ValueError, AttributeError):
+                # Not a UUID - try to find by cabin_id_string
+                cursor.execute("""
+                    SELECT id::text, calendar_id 
+                    FROM cabins 
+                    WHERE cabin_id_string = %s
+                """, (cabin_id_input,))
+                cabin_row = cursor.fetchone()
+                if cabin_row:
+                    cabin_uuid = cabin_row['id']
+                    new_calendar_id = cabin_row['calendar_id']
+                else:
+                    raise HTTPException(status_code=404, detail=f"Cabin not found: {cabin_id_input}. Must be a valid UUID or cabin_id_string (e.g., ZB01, ZB02)")
+            
+            if not cabin_uuid:
+                raise HTTPException(status_code=404, detail=f"Cabin not found: {cabin_id_input}")
+            
+            # Get existing booking with old cabin info for calendar migration
+            cursor.execute("""
+                SELECT 
+                    b.customer_id, 
+                    b.cabin_id::text, 
+                    b.event_id,
+                    c.calendar_id as old_calendar_id
+                FROM bookings b
+                LEFT JOIN cabins c ON b.cabin_id = c.id
+                WHERE b.id = %s::uuid
+            """, (booking_id,))
+            existing = cursor.fetchone()
+            
+            if not existing:
+                raise HTTPException(status_code=404, detail="Booking not found")
+            
+            existing_customer_id = existing['customer_id']
+            existing_cabin_id = existing['cabin_id']
+            event_id = existing['event_id']
+            old_calendar_id = existing['old_calendar_id']
+            
+            # Update or create customer
+            customer_id = existing_customer_id
+            if customer_id:
+                # Update existing customer
+                update_fields = []
+                update_values = []
+                
+                if customer_name:
+                    update_fields.append("name = %s")
+                    update_values.append(customer_name)
+                if customer_email:
+                    update_fields.append("email = %s")
+                    update_values.append(customer_email)
+                if customer_phone:
+                    update_fields.append("phone = %s")
+                    update_values.append(customer_phone)
+                
+                if update_fields:
+                    update_values.append(customer_id)
+                    cursor.execute(f"""
+                        UPDATE customers SET
+                            {', '.join(update_fields)}
+                        WHERE id = %s::uuid
+                    """, tuple(update_values))
+            else:
+                # Create new customer
+                customer_id = save_customer_to_db(
+                    name=customer_name,
+                    email=customer_email,
+                    phone=customer_phone
+                )
+            
+            # Check if updated_at column exists
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'bookings' AND column_name = 'updated_at'
+            """)
+            has_updated_at = cursor.fetchone() is not None
+            
+            # Check if cabin changed - if so, need to move event to new calendar
+            cabin_changed = cabin_uuid != existing_cabin_id
+            calendar_moved = False
+            new_event_id = event_id
+            new_event_link = None
+            
+            if cabin_changed and event_id and old_calendar_id and new_calendar_id:
+                # Need to move event from old calendar to new calendar
+                try:
+                    from src.main import get_credentials_api, build_calendar_service, create_calendar_event, delete_calendar_event
+                    from src.main import parse_datetime_local, ISRAEL_TZ
+                    from datetime import datetime
+                    
+                    creds = get_credentials_api()
+                    service = build_calendar_service(creds)
+                    
+                    # Parse dates for new event
+                    check_in_dt = parse_datetime_local(f"{check_in} 15:00")
+                    check_out_dt = parse_datetime_local(f"{check_out} 11:00")
+                    
+                    # Build description with updated cabin info
+                    desc_lines = [
+                        f"Cabin: {cabin_uuid}",
+                        f"Customer: {customer_name}",
+                    ]
+                    if customer_email:
+                        desc_lines.append(f"Email: {customer_email}")
+                    if customer_phone:
+                        desc_lines.append(f"Phone: {customer_phone}")
+                    desc_lines.extend([
+                        f"Check-in: {check_in_dt.isoformat()}",
+                        f"Check-out: {check_out_dt.isoformat()}",
+                    ])
+                    if adults or kids:
+                        desc_lines.append(f"Guests: {adults} adults, {kids} kids")
+                    if total_price:
+                        desc_lines.append(f"Total: {total_price} ILS")
+                    description = "\n".join(desc_lines)
+                    
+                    # Create new event in new calendar
+                    summary = f"הזמנה | {customer_name}"
+                    new_event = create_calendar_event(
+                        service=service,
+                        calendar_id=new_calendar_id,
+                        summary=summary,
+                        start_local=check_in_dt,
+                        end_local=check_out_dt,
+                        description=description
+                    )
+                    new_event_id = new_event.get('id')
+                    new_event_link = new_event.get('htmlLink')
+                    
+                    # Delete old event from old calendar
+                    try:
+                        delete_calendar_event(service, old_calendar_id, event_id)
+                        print(f"✅ Moved event {event_id[:20] if event_id and len(event_id) > 20 else (event_id or 'unknown')}... from calendar {old_calendar_id[:20] if old_calendar_id and len(old_calendar_id) > 20 else (old_calendar_id or 'unknown')}... to {new_calendar_id[:20] if new_calendar_id and len(new_calendar_id) > 20 else (new_calendar_id or 'unknown')}...")
+                    except Exception as delete_error:
+                        print(f"⚠️ Warning: Could not delete old event {event_id[:20] if event_id and len(event_id) > 20 else (event_id or 'unknown')}... from old calendar: {delete_error}")
+                    
+                    calendar_moved = True
+                    print(f"✅ Created new event {new_event_id[:20] if new_event_id and len(new_event_id) > 20 else (new_event_id or 'unknown')}... in new calendar")
+                except Exception as calendar_error:
+                    print(f"❌ Error moving calendar event: {calendar_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue with DB update even if calendar move failed
+            
+            # Update booking
+            update_fields = []
+            update_values = []
+            
+            if cabin_uuid != existing_cabin_id:
+                update_fields.append("cabin_id = %s::uuid")
+                update_values.append(cabin_uuid)
+            
+            if calendar_moved and new_event_id:
+                update_fields.append("event_id = %s")
+                update_values.append(new_event_id)
+                if new_event_link:
+                    update_fields.append("event_link = %s")
+                    update_values.append(new_event_link)
+            
+            update_fields.append("customer_id = %s::uuid")
+            update_values.append(customer_id)
+            
+            update_fields.append("check_in = %s::date")
+            update_values.append(check_in)
+            
+            update_fields.append("check_out = %s::date")
+            update_values.append(check_out)
+            
+            update_fields.append("adults = %s")
+            update_values.append(adults)
+            
+            update_fields.append("kids = %s")
+            update_values.append(kids)
+            
+            update_fields.append("total_price = %s")
+            update_values.append(total_price)
+            
+            if status:
+                update_fields.append("status = %s")
+                update_values.append(status)
+            
+            if has_updated_at:
+                update_fields.append("updated_at = CURRENT_TIMESTAMP")
+            
+            update_values.append(booking_id)
+            
+            cursor.execute(f"""
+                UPDATE bookings SET
+                    {', '.join(update_fields)}
+                WHERE id = %s::uuid
+            """, tuple(update_values))
+            
+            conn.commit()
+            
+            result_message = "Booking updated successfully"
+            if calendar_moved:
+                result_message += f". Event moved automatically from old calendar to new calendar (event_id: {new_event_id[:20] if new_event_id and len(new_event_id) > 20 else (new_event_id or 'N/A')}...)"
+            elif cabin_changed and not calendar_moved:
+                result_message += ". Cabin changed but calendar event was not moved automatically (missing event_id or calendar_id). Please sync DB → Calendar manually."
+            else:
+                result_message += ". Event will be updated on next DB → Calendar sync."
+            
+            return {
+                "success": True,
+                "message": result_message,
+                "booking_id": booking_id,
+                "event_id": new_event_id if calendar_moved else event_id,
+                "event_link": new_event_link,
+                "calendar_moved": calendar_moved,
+                "note": "Event automatically moved to new calendar" if calendar_moved else "Event update needed - run DB → Calendar sync if needed"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in update_booking: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Error updating booking: {str(e)}")
+
+
 @app.post("/admin/bookings/{booking_id}/cancel")
 async def cancel_booking(booking_id: str):
     """
@@ -1809,6 +2085,37 @@ class ChatResponse(BaseModel):
     actions_suggested: List[str] = Field(default_factory=list, description="Suggested actions")
     confidence: float = Field(0.0, description="Confidence score (0.0-1.0)")
     conversation_id: str = Field(..., description="Conversation ID (UUID)")
+    booking_flow: Optional[Dict[str, Any]] = Field(None, description="Booking flow state (if in booking process)")
+    show_customer_form: Optional[bool] = Field(False, description="Whether to show customer details form")
+
+
+class CustomerDetailsRequest(BaseModel):
+    """Request model for customer details in booking flow"""
+    conversation_id: str = Field(..., description="Conversation ID (UUID)")
+    cabin_id: str = Field(..., description="Cabin ID")
+    check_in: str = Field(..., description="Check-in date (YYYY-MM-DD)")
+    check_out: str = Field(..., description="Check-out date (YYYY-MM-DD)")
+    customer_name: str = Field(..., description="Customer full name")
+    phone: str = Field(..., description="Customer phone number")
+    email: str = Field(..., description="Customer email address")
+    adults: int = Field(..., description="Number of adults")
+    kids: int = Field(0, description="Number of kids")
+    notes: Optional[str] = Field(None, description="Additional notes")
+    total_price: Optional[float] = Field(None, description="Total price (optional, will be calculated if not provided)")
+
+
+class CustomerDetailsResponse(BaseModel):
+    """Response model for customer details submission"""
+    success: bool
+    hold_id: Optional[str] = None
+    booking_id: Optional[str] = None
+    event_id: Optional[str] = None
+    event_link: Optional[str] = None
+    expires_at: Optional[str] = None
+    message: str
+    payment_required: bool = False
+    payment_intent_id: Optional[str] = None
+    client_secret: Optional[str] = None
 
 
 @app.post("/agent/chat", response_model=ChatResponse)
@@ -1893,8 +2200,11 @@ async def agent_chat(request: ChatRequest):
                                         conversation_context['check_out'] = quote['check_out']
                                     if 'cabin_id' in quote and 'cabin_id' not in conversation_context:
                                         conversation_context['cabin_id'] = quote['cabin_id']
-                            # Break after first assistant message to get most recent context
-                            break
+                            # IMPORTANT: Restore booking_flow state from previous message
+                            if 'booking_flow' in msg_metadata and 'booking_flow' not in conversation_context:
+                                conversation_context['booking_flow'] = msg_metadata['booking_flow']
+                        # Break after first assistant message to get most recent context
+                        break
         
         # Create new conversation if needed
         if not conversation_id:
@@ -1965,7 +2275,7 @@ async def agent_chat(request: ChatRequest):
         if not extracted_cabin_id:
             message_lower = request.message.lower()
             message_words = message_lower.split()
-            cabin_names = {'אמי': 'ZB02', 'יולי': 'ZB01', 'מורן': 'ZB03', 'מורני': 'ZB03'}
+            cabin_names = {'אמי': 'ZB02', 'יולי': 'ZB01', 'מורן': 'ZB03', 'מורני': 'ZB03', 'ליאה': 'ZB04'}  # TODO: Verify cabin ID for ליאה
             for name, cabin_id in cabin_names.items():
                 # Check if name appears as a word (not part of another word)
                 if name in message_words or f'צימר של {name}' in message_lower or f'צימר {name}' in message_lower:
@@ -2071,152 +2381,265 @@ async def agent_chat(request: ChatRequest):
                 tool_results['list_cabins'] = None
         
         # Tool 1: Check Availability
-        if 'availability' in actions_suggested and context_dict.get('check_in') and context_dict.get('check_out'):
-            try:
-                service, cabins = get_service()
-                check_in_local = parse_datetime_local(context_dict['check_in'])
-                check_out_local = parse_datetime_local(context_dict['check_out'])
-                check_in_utc = to_utc(check_in_local)
-                check_out_utc = to_utc(check_out_local)
-                
-                # Check if this is a month range query
-                is_month_range = context_dict.get('is_month_range', False)
+        if 'availability' in actions_suggested:
+            # If no dates provided, check if we have cabin_id to show next month availability
+            if not context_dict.get('check_in') or not context_dict.get('check_out'):
                 filter_cabin_id = context_dict.get('cabin_id')
                 
-                # If month range and specific cabin, get available dates list
-                if is_month_range and filter_cabin_id:
-                    # Find the cabin
-                    target_cabin = None
-                    for cabin in cabins:
-                        cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
-                        cabin_name = cabin.get('name', '')
-                        if (cabin_id_str.upper() == filter_cabin_id.upper() or 
-                            normalize_text(cabin_name).lower() == normalize_text(filter_cabin_id).lower()):
-                            target_cabin = cabin
-                            break
+                # If specific cabin requested without dates, check next month's availability
+                if filter_cabin_id:
+                    try:
+                        service, cabins = get_service()
+                        
+                        # Find the cabin
+                        target_cabin = None
+                        for cabin in cabins:
+                            cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                            cabin_name = cabin.get('name', '')
+                            if (cabin_id_str.upper() == filter_cabin_id.upper() or 
+                                normalize_text(cabin_name).lower() == normalize_text(filter_cabin_id).lower()):
+                                target_cabin = cabin
+                                break
+                        
+                        if target_cabin:
+                            calendar_id = target_cabin.get('calendar_id') or target_cabin.get('calendarId')
+                            if calendar_id:
+                                # Check availability for next 60 days from today
+                                from datetime import datetime, timedelta
+                                from src.main import ISRAEL_TZ
+                                
+                                now = datetime.now(ISRAEL_TZ)
+                                # Start from today or tomorrow (don't check past dates)
+                                check_in_local = now.replace(hour=15, minute=0, second=0, microsecond=0)
+                                # Check next 60 days
+                                check_out_local = check_in_local + timedelta(days=60)
+                                
+                                check_in_utc = to_utc(check_in_local)
+                                check_out_utc = to_utc(check_out_local)
+                                
+                                # Get all events in the range
+                                from src.main import list_calendar_events
+                                time_min = _to_rfc3339_z(check_in_utc)
+                                time_max = _to_rfc3339_z(check_out_utc)
+                                events = list_calendar_events(service, calendar_id, time_min, time_max)
+                                
+                                # Get all booked dates
+                                booked_dates = set()
+                                for event in events:
+                                    start_raw = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date")
+                                    end_raw = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date")
+                                    if start_raw and end_raw:
+                                        from src.main import _parse_event_dt
+                                        start_dt = _parse_event_dt(start_raw)
+                                        end_dt = _parse_event_dt(end_raw)
+                                        
+                                        # Add all dates in the range
+                                        current = start_dt
+                                        while current < end_dt:
+                                            booked_dates.add(current.strftime('%Y-%m-%d'))
+                                            current += timedelta(days=1)
+                                
+                                # Get all dates in the range
+                                all_dates = []
+                                current = check_in_local
+                                while current < check_out_local:
+                                    all_dates.append(current.strftime('%Y-%m-%d'))
+                                    current += timedelta(days=1)
+                                
+                                # Available dates = all dates - booked dates
+                                available_dates = [d for d in all_dates if d not in booked_dates]
+                                
+                                # Store in tool_results for agent to use
+                                tool_results['available_dates'] = available_dates
+                                tool_results['availability'] = [{
+                                    'cabin_id': target_cabin.get('cabin_id_string') or str(target_cabin.get('cabin_id', '')),
+                                    'name': target_cabin.get('name'),
+                                    'area': target_cabin.get('area'),
+                                    'available_dates': available_dates,
+                                    'total_available': len(available_dates),
+                                    'total_dates_in_range': len(all_dates),
+                                    'booked_dates': sorted(list(booked_dates)),
+                                    'is_month_range': True
+                                }]
+                                # Format month name for display (Hebrew month names)
+                                months_he = {
+                                    1: 'ינואר', 2: 'פברואר', 3: 'מרץ', 4: 'אפריל', 5: 'מאי', 6: 'יוני',
+                                    7: 'יולי', 8: 'אוגוסט', 9: 'ספטמבר', 10: 'אוקטובר', 11: 'נובמבר', 12: 'דצמבר'
+                                }
+                                month_name_he = months_he.get(check_in_local.month, check_in_local.strftime('%B'))
+                                range_description = f"{month_name_he} {check_in_local.year}" if len(available_dates) <= 31 else f"60 הימים הקרובים"
+                                
+                                tool_results['context'] = {
+                                    'is_month_range': True,
+                                    'check_in': check_in_local.strftime('%Y-%m-%d'),
+                                    'check_out': (check_out_local - timedelta(days=1)).strftime('%Y-%m-%d'),
+                                    'cabin_id': filter_cabin_id,
+                                    'month_name': range_description
+                                }
+                            else:
+                                tool_results['availability'] = None
+                                tool_results['availability_needs_dates'] = True
+                        else:
+                            tool_results['availability'] = None
+                            tool_results['availability_needs_dates'] = True
+                    except Exception as e:
+                        print(f"Warning: Could not check monthly availability: {e}")
+                        tool_results['availability'] = None
+                        tool_results['availability_needs_dates'] = True
+                else:
+                    # No cabin_id and no dates - ask when
+                    tool_results['availability'] = None
+                    tool_results['availability_needs_dates'] = True
+            else:
+                # Has dates - proceed with normal availability check
+                try:
+                    service, cabins = get_service()
+                    check_in_local = parse_datetime_local(context_dict['check_in'])
+                    check_out_local = parse_datetime_local(context_dict['check_out'])
+                    check_in_utc = to_utc(check_in_local)
+                    check_out_utc = to_utc(check_out_local)
                     
-                    if target_cabin:
-                        calendar_id = target_cabin.get('calendar_id') or target_cabin.get('calendarId')
-                        if calendar_id:
-                            # Get all events in the month
-                            from src.main import list_calendar_events
-                            time_min = _to_rfc3339_z(check_in_utc)
-                            time_max = _to_rfc3339_z(check_out_utc)
-                            events = list_calendar_events(service, calendar_id, time_min, time_max)
-                            
-                            # Get all booked dates
-                            booked_dates = set()
-                            for event in events:
-                                start_raw = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date")
-                                end_raw = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date")
-                                if start_raw and end_raw:
-                                    from src.main import _parse_event_dt
-                                    start_dt = _parse_event_dt(start_raw)
-                                    end_dt = _parse_event_dt(end_raw)
-                                    
-                                    # Add all dates in the range
-                                    current = start_dt
-                                    while current < end_dt:
-                                        booked_dates.add(current.strftime('%Y-%m-%d'))
-                                        current += timedelta(days=1)
-                            
-                            # Get all dates in the month
-                            all_dates = []
-                            current = check_in_local
-                            while current <= check_out_local:
-                                all_dates.append(current.strftime('%Y-%m-%d'))
-                                current += timedelta(days=1)
-                            
-                            # Available dates = all dates - booked dates
-                            available_dates = [d for d in all_dates if d not in booked_dates]
-                            
-                            # Store in tool_results for agent to use
-                            tool_results['available_dates'] = available_dates
-                            tool_results['context'] = {
-                                'is_month_range': True,
-                                'check_in': context_dict['check_in'],
-                                'check_out': context_dict['check_out'],
-                                'cabin_id': filter_cabin_id,
-                                'month_name': context_dict.get('month_name', 'החודש')
-                            }
-                            
-                            # Also add the cabin to availability results
-                            cabin_id_str = target_cabin.get('cabin_id_string') or str(target_cabin.get('cabin_id', ''))
-                            images_urls = target_cabin.get('images_urls', [])
-                            if not images_urls and cabin_id_str and not '-' in cabin_id_str:
-                                images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
-                            
-                            tool_results['availability'] = [{
-                                'cabin_id': cabin_id_str,
-                                'name': target_cabin.get('name'),
-                                'area': target_cabin.get('area'),
-                                'available_dates': available_dates,
-                                'total_available': len(available_dates),
-                                'images_urls': images_urls,
-                            }]
+                    # Check if this is a month range query
+                    is_month_range = context_dict.get('is_month_range', False)
+                    filter_cabin_id = context_dict.get('cabin_id')
+                    
+                    # If month range and specific cabin, get available dates list
+                    if is_month_range and filter_cabin_id:
+                        # Find the cabin
+                        target_cabin = None
+                        for cabin in cabins:
+                            cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                            cabin_name = cabin.get('name', '')
+                            if (cabin_id_str.upper() == filter_cabin_id.upper() or 
+                                normalize_text(cabin_name).lower() == normalize_text(filter_cabin_id).lower()):
+                                target_cabin = cabin
+                                break
+                        
+                        if target_cabin:
+                            calendar_id = target_cabin.get('calendar_id') or target_cabin.get('calendarId')
+                            if calendar_id:
+                                # Get all events in the month
+                                from src.main import list_calendar_events
+                                time_min = _to_rfc3339_z(check_in_utc)
+                                time_max = _to_rfc3339_z(check_out_utc)
+                                events = list_calendar_events(service, calendar_id, time_min, time_max)
+                                
+                                # Get all booked dates
+                                booked_dates = set()
+                                for event in events:
+                                    start_raw = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date")
+                                    end_raw = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date")
+                                    if start_raw and end_raw:
+                                        from src.main import _parse_event_dt
+                                        start_dt = _parse_event_dt(start_raw)
+                                        end_dt = _parse_event_dt(end_raw)
+                                        
+                                        # Add all dates in the range
+                                        current = start_dt
+                                        while current < end_dt:
+                                            booked_dates.add(current.strftime('%Y-%m-%d'))
+                                            current += timedelta(days=1)
+                                
+                                # Get all dates in the month
+                                all_dates = []
+                                current = check_in_local
+                                while current <= check_out_local:
+                                    all_dates.append(current.strftime('%Y-%m-%d'))
+                                    current += timedelta(days=1)
+                                
+                                # Available dates = all dates - booked dates
+                                available_dates = [d for d in all_dates if d not in booked_dates]
+                                
+                                # Store in tool_results for agent to use
+                                tool_results['available_dates'] = available_dates
+                                tool_results['context'] = {
+                                    'is_month_range': True,
+                                    'check_in': context_dict['check_in'],
+                                    'check_out': context_dict['check_out'],
+                                    'cabin_id': filter_cabin_id,
+                                    'month_name': context_dict.get('month_name', 'החודש')
+                                }
+                                
+                                # Also add the cabin to availability results
+                                cabin_id_str = target_cabin.get('cabin_id_string') or str(target_cabin.get('cabin_id', ''))
+                                images_urls = target_cabin.get('images_urls', [])
+                                if not images_urls and cabin_id_str and not '-' in cabin_id_str:
+                                    images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                                
+                                tool_results['availability'] = [{
+                                    'cabin_id': cabin_id_str,
+                                    'name': target_cabin.get('name'),
+                                    'area': target_cabin.get('area'),
+                                    'available_dates': available_dates,
+                                    'booked_dates': sorted(list(booked_dates)),
+                                    'total_available': len(available_dates),
+                                    'total_dates_in_range': len(all_dates),
+                                    'images_urls': images_urls,
+                                    'is_month_range': True
+                                }]
+                            else:
+                                tool_results['availability'] = None
                         else:
                             tool_results['availability'] = None
                     else:
-                        tool_results['availability'] = None
-                else:
-                    # Regular availability check (specific date range)
-                    wanted_features = None
-                    if context_dict.get('features'):
-                        wanted_features = parse_features_arg(context_dict['features'])
-                    
-                    available_cabins = find_available_cabins(
-                        service=service,
-                        cabins=cabins,
-                        check_in_utc=check_in_utc,
-                        check_out_utc=check_out_utc,
-                        adults=context_dict.get('guests'),
-                        kids=None,
-                        area=None,
-                        wanted_features=wanted_features,
-                        verbose=False,
-                    )
-                    
-                    # If cabin_id specified, filter to that cabin only
-                    if filter_cabin_id:
-                        available_cabins = [
-                            c for c in available_cabins 
-                            if (c.get('cabin_id_string') or str(c.get('cabin_id', ''))).upper() == filter_cabin_id.upper()
-                            or normalize_text(str(c.get('name', ''))).lower() == normalize_text(filter_cabin_id).lower()
-                        ]
-                    
-                    # Format results with more details
-                    tool_results['availability'] = []
-                    for cabin in available_cabins[:5]:  # Limit to 5 results
-                        pricing = compute_price_for_stay(cabin, check_in_local, check_out_local)
-                        cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                        # Regular availability check (specific date range)
+                        wanted_features = None
+                        if context_dict.get('features'):
+                            wanted_features = parse_features_arg(context_dict['features'])
                         
-                        # Get images if available
-                        images_urls = cabin.get('images_urls', [])
-                        if not images_urls and cabin_id_str and not '-' in cabin_id_str:
-                            # Try to construct image path
-                            images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                        available_cabins = find_available_cabins(
+                            service=service,
+                            cabins=cabins,
+                            check_in_utc=check_in_utc,
+                            check_out_utc=check_out_utc,
+                            adults=context_dict.get('guests'),
+                            kids=None,
+                            area=None,
+                            wanted_features=wanted_features,
+                            verbose=False,
+                        )
                         
-                        tool_results['availability'].append({
-                            'cabin_id': cabin_id_str,
-                            'name': cabin.get('name'),
-                            'area': cabin.get('area'),
-                            'nights': pricing.get('nights', 0),
-                            'total_price': pricing.get('total', 0),
-                            'features': cabin.get('features'),
-                            'images_urls': images_urls,
-                            'description': cabin.get('description') or cabin.get('notes', '')
-                        })
-                    
-                    tool_results['context'] = {
-                        'check_in': context_dict['check_in'],
-                        'check_out': context_dict['check_out'],
-                        'cabin_id': filter_cabin_id
-                    }
-            except Exception as e:
-                print(f"Warning: Could not check availability: {e}")
-                import traceback
-                traceback.print_exc()
-                tool_results['availability'] = None
+                        # If cabin_id specified, filter to that cabin only
+                        if filter_cabin_id:
+                            available_cabins = [
+                                c for c in available_cabins 
+                                if (c.get('cabin_id_string') or str(c.get('cabin_id', ''))).upper() == filter_cabin_id.upper()
+                                or normalize_text(str(c.get('name', ''))).lower() == normalize_text(filter_cabin_id).lower()
+                            ]
+                        
+                        # Format results with more details
+                        tool_results['availability'] = []
+                        for cabin in available_cabins[:5]:  # Limit to 5 results
+                            pricing = compute_price_for_stay(cabin, check_in_local, check_out_local)
+                            cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
+                            
+                            # Get images if available
+                            images_urls = cabin.get('images_urls', [])
+                            if not images_urls and cabin_id_str and not '-' in cabin_id_str:
+                                # Try to construct image path
+                                images_urls = [f'/zimmers_pic/{cabin_id_str}/hero-cabin.jpg']
+                            
+                            tool_results['availability'].append({
+                                'cabin_id': cabin_id_str,
+                                'name': cabin.get('name'),
+                                'area': cabin.get('area'),
+                                'nights': pricing.get('nights', 0),
+                                'total_price': pricing.get('total', 0),
+                                'features': cabin.get('features'),
+                                'images_urls': images_urls,
+                                'description': cabin.get('description') or cabin.get('notes', '')
+                            })
+                        
+                        tool_results['context'] = {
+                            'check_in': context_dict['check_in'],
+                            'check_out': context_dict['check_out'],
+                            'cabin_id': filter_cabin_id
+                        }
+                except Exception as e:
+                    print(f"Warning: Could not check availability: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    tool_results['availability'] = None
         
         # Tool 4: Get Cabin Info (general information) - also used for location requests
         if ('cabin_info' in actions_suggested or intent == 'location') and context_dict.get('cabin_id'):
@@ -2257,25 +2680,86 @@ async def agent_chat(request: ChatRequest):
                     base_price = chosen.get('base_price', 0) or chosen.get('price', 0)
                     weekend_price = chosen.get('weekend_price', 0) or chosen.get('weekend', 0)
                     
-                    # Get address components from Google Sheets format
-                    # Google Sheets returns exact column names as keys
-                    street_name = chosen.get('Street name + number', '') or chosen.get('street_name', '') or chosen.get('street', '')
-                    city = chosen.get('City', '') or chosen.get('city', '')
-                    postal_code = chosen.get('Postal code', '') or chosen.get('postal_code', '')
+                    # Get address components - try multiple field name variations
+                    # First try from chosen (could be from DB or Sheets)
+                    street_name = (chosen.get('Street name + number') or 
+                                  chosen.get('street_name') or 
+                                  chosen.get('street') or 
+                                  chosen.get('address_line') or 
+                                  chosen.get('Address') or
+                                  '')
+                    city = (chosen.get('City') or 
+                           chosen.get('city') or 
+                           chosen.get('location') or
+                           '')
+                    postal_code = (chosen.get('Postal code') or 
+                                  chosen.get('postal_code') or 
+                                  chosen.get('postalcode') or
+                                  '')
+                    
+                    # If address components are missing from DB/chosen, try reading directly from Google Sheets
+                    if not street_name and not city and not postal_code:
+                        try:
+                            from src.main import get_credentials
+                            creds = get_credentials()
+                            sheets_cabins = read_cabins_from_sheet(creds)
+                            # Find matching cabin in Sheets by cabin_id_string
+                            for sheet_cabin in sheets_cabins:
+                                sheet_cabin_id = sheet_cabin.get('cabin_id') or sheet_cabin.get('cabin_id_string', '')
+                                if str(sheet_cabin_id).upper() == str(cabin_id_str).upper():
+                                    # Found matching cabin in Sheets - use its address data
+                                    street_name = (sheet_cabin.get('Street name + number') or 
+                                                  sheet_cabin.get('street_name') or 
+                                                  sheet_cabin.get('street') or 
+                                                  sheet_cabin.get('address_line') or 
+                                                  sheet_cabin.get('Address') or
+                                                  '')
+                                    city = (sheet_cabin.get('City') or 
+                                           sheet_cabin.get('city') or 
+                                           sheet_cabin.get('location') or
+                                           '')
+                                    postal_code = (sheet_cabin.get('Postal code') or 
+                                                  sheet_cabin.get('postal_code') or 
+                                                  sheet_cabin.get('postalcode') or
+                                                  '')
+                                    break
+                        except Exception as sheets_error:
+                            print(f"Warning: Could not read address from Google Sheets: {sheets_error}")
                     
                     # Convert postal_code to string if it's a number
                     if postal_code and not isinstance(postal_code, str):
                         postal_code = str(postal_code)
                     
-                    # Build full address
-                    address_parts = []
-                    if street_name:
-                        address_parts.append(str(street_name))
-                    if city:
-                        address_parts.append(str(city))
-                    if postal_code:
-                        address_parts.append(str(postal_code))
-                    full_address = ', '.join(address_parts) if address_parts else (chosen.get('address') or chosen.get('location', ''))
+                    # Try to get full address directly first
+                    full_address = (chosen.get('address') or 
+                                   chosen.get('Address') or 
+                                   chosen.get('location') or 
+                                   chosen.get('Location') or
+                                   '')
+                    
+                    # If no full address, build from components
+                    if not full_address:
+                        address_parts = []
+                        if street_name:
+                            address_parts.append(str(street_name))
+                        if city:
+                            address_parts.append(str(city))
+                        if postal_code:
+                            address_parts.append(str(postal_code))
+                        full_address = ', '.join(address_parts) if address_parts else ''
+                    
+                    # Build Google Maps and Waze URLs if address exists
+                    google_maps_url = None
+                    waze_url = None
+                    if full_address:
+                        import urllib.parse
+                        encoded_address = urllib.parse.quote(full_address)
+                        google_maps_url = f"https://www.google.com/maps/search/?api=1&query={encoded_address}"
+                        waze_url = f"https://waze.com/ul?q={encoded_address}"
+                    else:
+                        # Try to use existing URLs from Sheets if address field is missing
+                        google_maps_url = chosen.get('google_maps_url') or chosen.get('Google Maps URL') or None
+                        waze_url = chosen.get('waze_url') or chosen.get('Waze URL') or None
                     
                     tool_results['cabin_info'] = {
                         'cabin_id': cabin_id_str,
@@ -2285,6 +2769,8 @@ async def agent_chat(request: ChatRequest):
                         'street_name': street_name,
                         'city': city,
                         'postal_code': postal_code,
+                        'google_maps_url': google_maps_url,
+                        'waze_url': waze_url,
                         'description': chosen.get('description') or chosen.get('notes', ''),
                         'features': chosen.get('features'),
                         'images_urls': images_urls,
@@ -2341,7 +2827,7 @@ async def agent_chat(request: ChatRequest):
                         apply_discounts=True
                     )
                     
-                    tool_results['quote'] = {
+                    quote_data = {
                         'cabin_id': cabin_id,
                         'cabin_name': chosen.get('name'),
                         'nights': pricing['nights'],
@@ -2350,6 +2836,19 @@ async def agent_chat(request: ChatRequest):
                         'check_in': context_dict['check_in'],
                         'check_out': context_dict['check_out']
                     }
+                    tool_results['quote'] = quote_data
+                    
+                    # If this quote was triggered from availability_confirmed, set booking_flow state
+                    booking_flow_check = context_dict.get('booking_flow') or (tool_results.get('booking_flow') if tool_results else None)
+                    if booking_flow_check and booking_flow_check.get('step') == 'availability_confirmed':
+                        tool_results['booking_flow'] = {
+                            'step': 'quote_confirmed',
+                            'cabin_id': cabin_id,
+                            'check_in': context_dict['check_in'],
+                            'check_out': context_dict['check_out'],
+                            'total': pricing['total'],
+                            'nights': pricing['nights']
+                        }
             except Exception as e:
                 print(f"Warning: Could not get quote: {e}")
                 tool_results['quote'] = None
@@ -2386,10 +2885,58 @@ async def agent_chat(request: ChatRequest):
                 print(f"Warning: Could not create hold: {e}")
                 tool_results['hold'] = None
         
-        # Handle special cases: "כן" or "תעשה הזמנה" - if we have quote, proceed to booking
-        if intent in ['confirm', 'book_now']:
-            # Try to get quote from context or tool_results
-            quote = context_dict.get('last_quote') or (tool_results.get('quote') if tool_results else None)
+        # Handle booking flow states AFTER all tools are ready
+        # This section processes booking_flow transitions based on current state and intent
+        
+        booking_flow_from_context = context_dict.get('booking_flow')
+        booking_flow_from_tools = tool_results.get('booking_flow') if tool_results else None
+        
+        # Step 1: After quote is generated from availability_confirmed, update state to quote_confirmed
+        if booking_flow_from_context and booking_flow_from_context.get('step') == 'availability_confirmed':
+            if 'quote' in tool_results and tool_results['quote']:
+                # Quote was just generated - update booking_flow to quote_confirmed
+                quote_data = tool_results['quote']
+                if not booking_flow_from_tools or booking_flow_from_tools.get('step') != 'quote_confirmed':
+                    tool_results['booking_flow'] = {
+                        'step': 'quote_confirmed',
+                        'cabin_id': quote_data.get('cabin_id') or booking_flow_from_context.get('cabin_id'),
+                        'check_in': quote_data.get('check_in') or booking_flow_from_context.get('check_in'),
+                        'check_out': quote_data.get('check_out') or booking_flow_from_context.get('check_out'),
+                        'total': quote_data.get('total', 0),
+                        'nights': quote_data.get('nights', 0)
+                    }
+                    booking_flow_from_tools = tool_results['booking_flow']
+        
+        # Step 2: If quote confirmed and user confirms → request customer details form
+        # Check both booking_flow_from_tools and booking_flow_from_context
+        current_booking_flow = booking_flow_from_tools or booking_flow_from_context
+        if current_booking_flow and current_booking_flow.get('step') == 'quote_confirmed':
+            if intent in ['confirm', 'book_now']:
+                # User confirmed quote - request customer details form
+                answer = "📝 **מעולה! בואו נתחיל בהזמנה.**\n\n"
+                answer += "אני צריך כמה פרטים ממך כדי להשלים את ההזמנה:\n\n"
+                answer += "• שם מלא\n"
+                answer += "• טלפון\n"
+                answer += "• כתובת מייל\n"
+                answer += "• מספר מבוגרים\n"
+                answer += "• מספר ילדים\n"
+                answer += "• הערות (אופציונלי)\n\n"
+                answer += "💡 **אני אפתח עבורך טופס מילוי פרטים עכשיו.**"
+                
+                # Set booking_flow to customer_details step
+                tool_results['booking_flow'] = {
+                    'step': 'customer_details_needed',
+                    'cabin_id': current_booking_flow.get('cabin_id'),
+                    'check_in': current_booking_flow.get('check_in'),
+                    'check_out': current_booking_flow.get('check_out'),
+                    'total': current_booking_flow.get('total'),
+                    'nights': current_booking_flow.get('nights')
+                }
+        
+        # Step 3: Fallback - if we have quote (from tool_results or context) and user confirms → request customer details
+        elif intent in ['confirm', 'book_now'] and 'quote' in tool_results and tool_results['quote'] and not answer:
+            # Try to get quote from tool_results (just generated) or context
+            quote = tool_results.get('quote') or context_dict.get('last_quote')
             cabin_id = context_dict.get('cabin_id')
             check_in = context_dict.get('check_in')
             check_out = context_dict.get('check_out')
@@ -2400,78 +2947,99 @@ async def agent_chat(request: ChatRequest):
                 check_in = quote.get('check_in') or check_in
                 check_out = quote.get('check_out') or check_out
             
-            if cabin_id and check_in and check_out:
-                # Create hold first, then booking
-                try:
-                    hold_manager = get_hold_manager()
-                    check_in_date = check_in.split(' ')[0] if ' ' in check_in else check_in
-                    check_out_date = check_out.split(' ')[0] if ' ' in check_out else check_out
-                    
-                    # Get customer name from context if available
-                    customer_name = context_dict.get('customer_name')
-                    
-                    hold_data = hold_manager.create_hold(
-                        cabin_id=cabin_id,
-                        check_in=check_in_date,
-                        check_out=check_out_date,
-                        customer_name=customer_name,
-                        customer_id=customer_id
-                    )
-                    
-                    if hold_data:
-                        # Also create calendar event
-                        try:
-                            service, cabins = get_service()
-                            chosen_cabin = None
-                            for cabin in cabins:
-                                cabin_id_str = cabin.get('cabin_id_string') or str(cabin.get('cabin_id', ''))
-                                if cabin_id_str.upper() == cabin_id.upper():
-                                    chosen_cabin = cabin
-                                    break
-                            
-                            if chosen_cabin:
-                                check_in_local = parse_datetime_local(f"{check_in_date} 15:00")
-                                check_out_local = parse_datetime_local(f"{check_out_date} 11:00")
-                                
-                                # Get customer name from context if available
-                                customer_name_for_event = customer_name or "לקוח"
-                                
-                                event = create_calendar_event(
-                                    service=service,
-                                    cabin=chosen_cabin,
-                                    check_in_local=check_in_local,
-                                    check_out_local=check_out_local,
-                                    customer_name=customer_name_for_event,
-                                    customer_phone=None,
-                                    customer_email=None,
-                                    notes="הזמנה דרך Agent Chat"
-                                )
-                                
-                                if event:
-                                    answer = f"✅ **הזמנה נוצרה בהצלחה!**\n\n"
-                                    answer += f"🏡 צימר: {chosen_cabin.get('name', cabin_id)}\n"
-                                    answer += f"📅 תאריכים: {check_in_date} → {check_out_date}\n"
-                                    answer += f"🔒 Hold ID: {hold_data.get('hold_id', '')}\n"
-                                    answer += f"📅 Event ID: {event.get('id', 'N/A')}\n"
-                                    if event.get('htmlLink'):
-                                        answer += f"🔗 [פתח ביומן Google]({event.get('htmlLink')})\n"
-                                    answer += f"\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n"
-                                    answer += f"\n💡 להשלמת התשלום, אנא השתמש ב-endpoint /book עם hold_id"
-                                else:
-                                    answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\n⚠️ לא הצלחתי ליצור אירוע ביומן. להשלמת ההזמנה, אנא השתמש ב-endpoint /book"
-                            else:
-                                answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\nלהשלמת ההזמנה, אנא השתמש ב-endpoint /book"
-                        except Exception as e:
-                            print(f"Warning: Could not create calendar event: {e}")
-                            answer = f"✅ שריינתי לך את הצימר!\n🔒 מספר הזמנה: {hold_data.get('hold_id', '')}\n⏰ השריון תקף עד {hold_data.get('expires_at', '')}\n\n⚠️ לא הצלחתי ליצור אירוע ביומן. להשלמת ההזמנה, אנא השתמש ב-endpoint /book"
-                        
-                        tool_results['hold'] = hold_data
-                    else:
-                        answer = "❌ לא הצלחתי ליצור שריין. האם תוכל לנסות שוב?"
-                except Exception as e:
-                    print(f"Warning: Could not create hold: {e}")
-                    answer = f"❌ שגיאה ביצירת הזמנה: {str(e)}"
+            # If we have quote but no customer details yet, request customer details form instead of creating hold
+            if quote and cabin_id and check_in and check_out:
+                answer = "📝 **מעולה! בואו נתחיל בהזמנה.**\n\n"
+                answer += "אני צריך כמה פרטים ממך כדי להשלים את ההזמנה:\n\n"
+                answer += "• שם מלא\n"
+                answer += "• טלפון\n"
+                answer += "• כתובת מייל\n"
+                answer += "• מספר מבוגרים\n"
+                answer += "• מספר ילדים\n"
+                answer += "• הערות (אופציונלי)\n\n"
+                answer += "💡 **אני אפתח עבורך טופס מילוי פרטים עכשיו.**"
+                
+                tool_results['booking_flow'] = {
+                    'step': 'customer_details_needed',
+                    'cabin_id': cabin_id,
+                    'check_in': check_in,
+                    'check_out': check_out,
+                    'total': quote.get('total', 0),
+                    'nights': quote.get('nights', 0)
+                }
+        
+        # Step 4: If user says "תזמין" but no quote yet → get quote first (don't create hold directly!)
+        elif intent == 'book_now' and not answer:
+            cabin_id = context_dict.get('cabin_id')
+            check_in = context_dict.get('check_in')
+            check_out = context_dict.get('check_out')
+            
+            # Check if we have quote already
+            quote = tool_results.get('quote') or context_dict.get('last_quote')
+            
+            if not quote and cabin_id and check_in and check_out:
+                # No quote yet - request quote first
+                answer = "💰 **בואו נתחיל בהצעת מחיר.**\n\n"
+                answer += f"אני אכין עבורך הצעת מחיר מפורטת לצימר {cabin_id} בתאריכים {check_in} - {check_out}.\n\n"
+                answer += "💡 **אחרי שתקבל את ההצעת מחיר, תוכל להזמין.**"
+                
+                # Trigger quote action
+                if 'quote' not in actions_suggested:
+                    actions_suggested.append('quote')
+                
+                # Set booking_flow to availability_confirmed so quote will update it
+                if not context_dict.get('booking_flow'):
+                    tool_results['booking_flow'] = {
+                        'step': 'availability_confirmed',
+                        'cabin_id': cabin_id,
+                        'check_in': check_in,
+                        'check_out': check_out
+                    }
+            elif quote and cabin_id and check_in and check_out:
+                # We have quote - request customer details form
+                answer = "📝 **מעולה! בואו נתחיל בהזמנה.**\n\n"
+                answer += "אני צריך כמה פרטים ממך כדי להשלים את ההזמנה:\n\n"
+                answer += "• שם מלא\n"
+                answer += "• טלפון\n"
+                answer += "• כתובת מייל\n"
+                answer += "• מספר מבוגרים\n"
+                answer += "• מספר ילדים\n"
+                answer += "• הערות (אופציונלי)\n\n"
+                answer += "💡 **אני אפתח עבורך טופס מילוי פרטים עכשיו.**"
+                
+                tool_results['booking_flow'] = {
+                    'step': 'customer_details_needed',
+                    'cabin_id': cabin_id,
+                    'check_in': check_in,
+                    'check_out': check_out,
+                    'total': quote.get('total', 0) if isinstance(quote, dict) else 0,
+                    'nights': quote.get('nights', 0) if isinstance(quote, dict) else 0
+                }
+            elif cabin_id and check_in and check_out:
+                # This should not happen in normal flow - user said "תזמין" but we don't have quote
+                # Request quote first instead of creating hold directly
+                answer = "💰 **בואו נתחיל בהצעת מחיר.**\n\n"
+                answer += f"אני אכין עבורך הצעת מחיר מפורטת לצימר {cabin_id} בתאריכים {check_in} - {check_out}.\n\n"
+                answer += "💡 **אחרי שתקבל את ההצעת מחיר, תוכל להזמין.**"
+                
+                # Trigger quote action
+                if 'quote' not in actions_suggested:
+                    actions_suggested.append('quote')
+                
+                # Set booking_flow to availability_confirmed so quote will update it
+                if not context_dict.get('booking_flow'):
+                    tool_results['booking_flow'] = {
+                        'step': 'availability_confirmed',
+                        'cabin_id': cabin_id,
+                        'check_in': check_in,
+                        'check_out': check_out
+                    }
+                
+                # Don't create hold - wait for quote first
+                # This code path should not normally execute - we already handled quote request above
+                pass
             else:
+                # Missing required information
                 answer = f"❌ חסרים פרטים להזמנה.\n"
                 if not cabin_id:
                     answer += "• ציין צימר (ZB01, ZB02, ZB03 או שמות: יולי, אמי, מורן)\n"
@@ -2507,7 +3075,7 @@ async def agent_chat(request: ChatRequest):
             "tool_results": tool_results
         }
         
-        # Save context for next messages
+        # Save context for next messages (including booking flow state)
         if context_dict.get('cabin_id'):
             assistant_metadata['cabin_id'] = context_dict['cabin_id']
         if context_dict.get('check_in'):
@@ -2516,6 +3084,9 @@ async def agent_chat(request: ChatRequest):
             assistant_metadata['check_out'] = context_dict['check_out']
         if 'quote' in tool_results and tool_results['quote']:
             assistant_metadata['quote'] = tool_results['quote']
+            assistant_metadata['last_quote'] = tool_results['quote']  # Save as last_quote for confirmation
+        if 'booking_flow' in tool_results and tool_results['booking_flow']:
+            assistant_metadata['booking_flow'] = tool_results['booking_flow']
         
         assistant_message_id = save_message(
             conversation_id=conversation_id,
@@ -2540,17 +3111,21 @@ async def agent_chat(request: ChatRequest):
         except Exception as audit_error:
             print(f"Warning: Could not save audit log: {audit_error}")
         
-        # Add availability results to context for frontend display
-        response_context = context_dict.copy() if context_dict else {}
-        if 'availability' in tool_results and tool_results['availability']:
-            response_context['availability_results'] = tool_results['availability']
+        # Determine if we should show customer form and prepare booking_flow response
+        show_customer_form = False
+        booking_flow_response = None
+        if 'booking_flow' in tool_results and tool_results['booking_flow']:
+            booking_flow_response = tool_results['booking_flow']
+            if booking_flow_response.get('step') == 'customer_details_needed':
+                show_customer_form = True
         
         return ChatResponse(
             answer=answer,
             actions_suggested=actions_suggested,
             confidence=confidence,
             conversation_id=conversation_id,
-            context=ChatContext(**response_context) if response_context else None
+            booking_flow=booking_flow_response,
+            show_customer_form=show_customer_form
         )
         
     except HTTPException:
@@ -2696,6 +3271,12 @@ class FAQApprovalRequest(BaseModel):
     answer: Optional[str] = Field(None, description="Edited answer (optional)")
 
 
+class FAQUpdateRequest(BaseModel):
+    """Request to update a FAQ (approved or pending)"""
+    question: Optional[str] = Field(None, description="Updated question")
+    answer: Optional[str] = Field(None, description="Updated answer")
+
+
 class BusinessFactRequest(BaseModel):
     """Request to set a business fact"""
     fact_key: str = Field(..., description="Fact key (e.g., 'check_in_time')")
@@ -2727,30 +3308,57 @@ async def approve_faq_endpoint(request: FAQApprovalRequest):
     """
     try:
         if request.approved:
-            success = approve_faq(
+            # Call approve_faq which now returns (success, message) tuple
+            success, status_message = approve_faq(
                 request.faq_id, 
                 request.approved_by,
                 request.question,
                 request.answer
             )
+            
             if success:
-                return {"message": "FAQ approved successfully", "faq_id": request.faq_id}
-            else:
-                # Check if FAQ exists to give better error message
-                from src.db import get_all_faqs
-                all_faqs = get_all_faqs(include_pending=True)
-                faq_exists = any(str(faq.get('id')) == request.faq_id for faq in all_faqs)
-                if not faq_exists:
-                    raise HTTPException(status_code=404, detail="FAQ not found")
+                if status_message == "already_approved":
+                    return {
+                        "message": "FAQ כבר מאושר ונשמר. אין צורך לאשר שוב.",
+                        "faq_id": request.faq_id,
+                        "was_already_approved": True
+                    }
+                elif status_message == "updated_while_approved":
+                    return {
+                        "message": "FAQ כבר מאושר ונעדכן בהצלחה.",
+                        "faq_id": request.faq_id,
+                        "was_already_approved": True
+                    }
+                elif status_message == "approved":
+                    return {
+                        "message": "FAQ אושר בהצלחה",
+                        "faq_id": request.faq_id,
+                        "was_already_approved": False
+                    }
                 else:
-                    # FAQ exists but approval failed - might already be approved, try to update instead
-                    if request.question or request.answer:
-                        # Try to update the FAQ
-                        from src.db import update_faq
-                        update_success = update_faq(request.faq_id, request.question, request.answer)
-                        if update_success:
-                            return {"message": "FAQ updated successfully (was already approved)", "faq_id": request.faq_id}
-                    raise HTTPException(status_code=400, detail="FAQ is already approved. Use PUT /admin/faq/{faq_id} to update it.")
+                    # Success but unknown status
+                    return {
+                        "message": f"FAQ processed: {status_message}",
+                        "faq_id": request.faq_id
+                    }
+            else:
+                # Approval failed
+                if status_message == "not_found":
+                    raise HTTPException(status_code=404, detail="FAQ not found")
+                elif status_message == "no_rows_updated":
+                    # FAQ might have been approved by another process, check status
+                    from src.db import get_all_faqs
+                    all_faqs = get_all_faqs(include_pending=True)
+                    existing_faq = next((faq for faq in all_faqs if str(faq.get('id')) == request.faq_id), None)
+                    if existing_faq and existing_faq.get('approved'):
+                        return {
+                            "message": "FAQ כבר מאושר ונשמר.",
+                            "faq_id": request.faq_id,
+                            "was_already_approved": True
+                        }
+                    raise HTTPException(status_code=400, detail="Failed to approve FAQ - no rows updated")
+                else:
+                    raise HTTPException(status_code=400, detail=f"Failed to approve FAQ: {status_message}")
         else:
             success = reject_faq(request.faq_id)
             if success:
@@ -2820,11 +3428,14 @@ async def get_all_faqs_endpoint(include_pending: bool = True):
 
 
 @app.put("/admin/faq/{faq_id}")
-async def update_faq_endpoint(faq_id: str, request: FAQApprovalRequest):
+async def update_faq_endpoint(faq_id: str, request: FAQUpdateRequest):
     """
     Update an existing FAQ (approved or pending)
     """
     try:
+        if not request.question and not request.answer:
+            raise HTTPException(status_code=400, detail="At least one of 'question' or 'answer' must be provided")
+        
         success = update_faq(
             faq_id=faq_id,
             question=request.question,
@@ -2833,7 +3444,14 @@ async def update_faq_endpoint(faq_id: str, request: FAQApprovalRequest):
         if success:
             return {"message": "FAQ updated successfully", "faq_id": faq_id}
         else:
-            raise HTTPException(status_code=404, detail="FAQ not found or no changes provided")
+            # Check if FAQ exists
+            from src.db import get_all_faqs
+            all_faqs = get_all_faqs(include_pending=True)
+            faq_exists = any(str(faq.get('id')) == faq_id for faq in all_faqs)
+            if not faq_exists:
+                raise HTTPException(status_code=404, detail="FAQ not found")
+            else:
+                raise HTTPException(status_code=400, detail="No changes detected or update failed")
     except HTTPException:
         raise
     except Exception as e:
@@ -2872,6 +3490,510 @@ async def delete_business_fact_endpoint(fact_key: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting business fact: {str(e)}")
+
+
+# ============================================================================
+# Sync Endpoints: Google Sheets ↔ DB and Google Calendar ↔ DB
+# ============================================================================
+
+@app.post("/admin/sync/sheets-to-db")
+async def sync_sheets_to_db_endpoint():
+    """
+    Sync cabins from Google Sheets to PostgreSQL database
+    """
+    try:
+        from src.sync_sheets import sync_sheets_to_db
+        print(f"\n{'='*60}")
+        print(f"Starting Sheets → DB sync")
+        print(f"{'='*60}")
+        result = sync_sheets_to_db()
+        # Handle both old and new return format
+        if len(result) == 4:
+            imported, updated, errors, error_list = result
+        else:
+            imported, updated, errors = result
+            error_list = []
+        print(f"\n{'='*60}")
+        print(f"Sheets → DB sync completed: {imported} imported, {updated} updated, {errors} errors")
+        if error_list:
+            print(f"Error details: {len(error_list)} errors")
+            for i, err in enumerate(error_list[:5], 1):  # Show first 5 errors
+                print(f"  {i}. [{err.get('type', 'unknown')}] {err.get('cabin', 'N/A')}: {err.get('error', 'Unknown error')}")
+            if len(error_list) > 5:
+                print(f"  ... and {len(error_list) - 5} more errors (check full list in response)")
+        print(f"{'='*60}\n")
+        return {
+            "success": errors == 0,
+            "imported": imported,
+            "updated": updated,
+            "errors": errors,
+            "error_list": error_list[:20] if error_list else [],  # Return first 20 errors
+            "message": f"Synced {imported} imported, {updated} updated, {errors} errors",
+            "details": "Check 'error_list' field for detailed error information. Also check server console (terminal) for full tracebacks."
+        }
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Critical error in sync_sheets_to_db_endpoint: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error syncing Sheets to DB: {error_msg}")
+
+
+@app.post("/admin/sync/db-to-sheets")
+async def sync_db_to_sheets_endpoint():
+    """
+    Sync cabins from PostgreSQL database to Google Sheets
+    """
+    try:
+        from src.sync_sheets import sync_db_to_sheets
+        print(f"\n{'='*60}")
+        print(f"Starting DB → Sheets sync")
+        print(f"{'='*60}")
+        updated, errors = sync_db_to_sheets()
+        print(f"\n{'='*60}")
+        print(f"DB → Sheets sync completed: {updated} rows updated, {errors} errors")
+        print(f"{'='*60}\n")
+        return {
+            "success": errors == 0,
+            "updated": updated,
+            "errors": errors,
+            "message": f"Synced {updated} rows to Sheets, {errors} errors",
+            "details": "Check server console (terminal) for detailed error messages. Press F12 in browser to see sync logs."
+        }
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Critical error in sync_db_to_sheets_endpoint: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error syncing DB to Sheets: {error_msg}")
+
+
+@app.post("/admin/sync/calendar-to-db")
+async def sync_calendar_to_db_endpoint(days_back: int = 30, days_forward: int = 365):
+    """
+    Sync bookings from Google Calendar to PostgreSQL database
+    Detects changes in calendar events (name, email, dates) and updates DB
+    
+    Args:
+        days_back: How many days back to sync (default: 30)
+        days_forward: How many days forward to sync (default: 365)
+    """
+    try:
+        from src.sync_calendar import sync_calendar_to_db
+        print(f"\n{'='*60}")
+        print(f"Starting Calendar → DB sync (days_back={days_back}, days_forward={days_forward})")
+        print(f"{'='*60}")
+        result = sync_calendar_to_db(days_back=days_back, days_forward=days_forward)
+        # Handle both old and new return format
+        if len(result) == 4:
+            imported, updated, errors, error_list = result
+        else:
+            imported, updated, errors = result
+            error_list = []
+        print(f"\n{'='*60}")
+        print(f"Calendar → DB sync completed: {imported} imported, {updated} updated, {errors} errors")
+        if error_list:
+            print(f"Error details: {len(error_list)} errors")
+            for i, err in enumerate(error_list[:5], 1):  # Show first 5 errors
+                print(f"  {i}. [{err.get('type', 'unknown')}] {err.get('error', 'Unknown error')}")
+            if len(error_list) > 5:
+                print(f"  ... and {len(error_list) - 5} more errors (check full list in response)")
+        print(f"{'='*60}\n")
+        return {
+            "success": errors == 0,
+            "imported": imported,
+            "updated": updated,
+            "errors": errors,
+            "error_list": error_list[:20] if error_list else [],  # Return first 20 errors
+            "message": f"Synced {imported} imported, {updated} updated, {errors} errors",
+            "details": "Check 'error_list' field for detailed error information. Also check server console (terminal) for full tracebacks."
+        }
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Critical error in sync_calendar_to_db_endpoint: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error syncing Calendar to DB: {error_msg}")
+
+
+@app.post("/admin/sync/db-to-calendar")
+async def sync_db_to_calendar_endpoint(booking_id: Optional[str] = None):
+    """
+    Sync booking from PostgreSQL database to Google Calendar
+    Updates calendar event if booking was changed in DB
+    
+    Args:
+        booking_id: Specific booking ID to sync (optional, if not provided syncs all recent bookings)
+    """
+    try:
+        from src.sync_calendar import update_calendar_event
+        from src.main import get_credentials_api, build_calendar_service
+        from src.db import get_db_connection
+        from psycopg2.extras import RealDictCursor
+        
+        creds = get_credentials_api()
+        service = build_calendar_service(creds)
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            if booking_id:
+                # Sync specific booking
+                cursor.execute("""
+                    SELECT 
+                        b.id::text as booking_id,
+                        b.event_id,
+                        b.check_in,
+                        b.check_out,
+                        b.adults,
+                        b.kids,
+                        b.total_price,
+                        c.id::text as cabin_id,
+                        c.calendar_id,
+                        c.name as cabin_name,
+                        cust.name as customer_name,
+                        cust.email as customer_email,
+                        cust.phone as customer_phone
+                    FROM bookings b
+                    JOIN cabins c ON b.cabin_id = c.id
+                    LEFT JOIN customers cust ON b.customer_id = cust.id
+                    WHERE b.id = %s::uuid AND b.event_id IS NOT NULL
+                """, (booking_id,))
+            else:
+                # Sync all recent bookings (last 30 days)
+                cursor.execute("""
+                    SELECT 
+                        b.id::text as booking_id,
+                        b.event_id,
+                        b.check_in,
+                        b.check_out,
+                        b.adults,
+                        b.kids,
+                        b.total_price,
+                        c.id::text as cabin_id,
+                        c.calendar_id,
+                        c.name as cabin_name,
+                        cust.name as customer_name,
+                        cust.email as customer_email,
+                        cust.phone as customer_phone
+                    FROM bookings b
+                    JOIN cabins c ON b.cabin_id = c.id
+                    LEFT JOIN customers cust ON b.customer_id = cust.id
+                    WHERE b.event_id IS NOT NULL 
+                    AND b.check_in >= CURRENT_DATE - INTERVAL '30 days'
+                    AND b.check_in <= CURRENT_DATE + INTERVAL '365 days'
+                """)
+            
+            bookings = cursor.fetchall()
+            
+            if not bookings:
+                return {
+                    "success": True,
+                    "updated": 0,
+                    "errors": 0,
+                    "message": "No bookings found to sync (all bookings must have event_id and be within date range)"
+                }
+            
+            print(f"Found {len(bookings)} bookings to sync")
+            
+            updated = 0
+            errors = 0
+            
+            for booking in bookings:
+                try:
+                    event_id = booking.get('event_id')
+                    calendar_id = booking.get('calendar_id')
+                    check_in = booking.get('check_in')
+                    check_out = booking.get('check_out')
+                    cabin_id = booking.get('cabin_id')
+                    cabin_name = booking.get('cabin_name', 'Unknown')
+                    customer_name = booking.get('customer_name', 'לקוח')
+                    customer_email = booking.get('customer_email')
+                    customer_phone = booking.get('customer_phone')
+                    adults = booking.get('adults', 0) or 0
+                    kids = booking.get('kids', 0) or 0
+                    total_price = booking.get('total_price', 0) or 0
+                    
+                    # Validate required fields
+                    if not event_id:
+                        print(f"Warning: Booking {booking.get('booking_id', 'unknown')} has no event_id, skipping")
+                        errors += 1
+                        continue
+                    
+                    if not calendar_id:
+                        print(f"Warning: Booking {booking.get('booking_id', 'unknown')} has no calendar_id, skipping")
+                        errors += 1
+                        continue
+                    
+                    if not check_in or not check_out:
+                        print(f"Warning: Booking {booking.get('booking_id', 'unknown')} has missing dates, skipping")
+                        errors += 1
+                        continue
+                    
+                    # Parse dates - handle both date objects and strings
+                    try:
+                        from datetime import datetime, date
+                        from src.main import parse_datetime_local, ISRAEL_TZ
+                        
+                        # Handle check_in date
+                        if isinstance(check_in, date):
+                            check_in_dt = datetime.combine(check_in, datetime.min.time()).replace(tzinfo=ISRAEL_TZ)
+                            check_in_dt = check_in_dt.replace(hour=15, minute=0)
+                        elif isinstance(check_in, datetime):
+                            check_in_dt = check_in.replace(tzinfo=ISRAEL_TZ) if check_in.tzinfo is None else check_in
+                            check_in_dt = check_in_dt.replace(hour=15, minute=0)
+                        elif isinstance(check_in, str):
+                            check_in_dt = parse_datetime_local(f"{check_in} 15:00")
+                        else:
+                            raise ValueError(f"Unsupported check_in type: {type(check_in)}")
+                        
+                        # Handle check_out date
+                        if isinstance(check_out, date):
+                            check_out_dt = datetime.combine(check_out, datetime.min.time()).replace(tzinfo=ISRAEL_TZ)
+                            check_out_dt = check_out_dt.replace(hour=11, minute=0)
+                        elif isinstance(check_out, datetime):
+                            check_out_dt = check_out.replace(tzinfo=ISRAEL_TZ) if check_out.tzinfo is None else check_out
+                            check_out_dt = check_out_dt.replace(hour=11, minute=0)
+                        elif isinstance(check_out, str):
+                            check_out_dt = parse_datetime_local(f"{check_out} 11:00")
+                        else:
+                            raise ValueError(f"Unsupported check_out type: {type(check_out)}")
+                    except Exception as date_error:
+                        print(f"❌ Error parsing dates for booking {booking.get('booking_id', 'unknown')[:8]}...: {date_error}")
+                        import traceback
+                        traceback.print_exc()
+                        errors += 1
+                        continue
+                    
+                    # Build description with all booking details
+                    desc_lines = [
+                        f"Cabin: {cabin_id}",
+                        f"Customer: {customer_name}",
+                    ]
+                    if customer_email:
+                        desc_lines.append(f"Email: {customer_email}")
+                    if customer_phone:
+                        desc_lines.append(f"Phone: {customer_phone}")
+                    desc_lines.extend([
+                        f"Check-in: {check_in_dt.isoformat()}",
+                        f"Check-out: {check_out_dt.isoformat()}",
+                    ])
+                    if adults or kids:
+                        desc_lines.append(f"Guests: {adults} adults, {kids} kids")
+                    if total_price:
+                        desc_lines.append(f"Total: {total_price} ILS")
+                    description = "\n".join(desc_lines)
+                    
+                    # Update calendar event
+                    summary = f"הזמנה | {customer_name}"
+                    try:
+                        result = update_calendar_event(
+                            service=service,
+                            event_id=event_id,
+                            calendar_id=calendar_id,
+                            summary=summary,
+                            description=description,
+                            start_local=check_in_dt,
+                            end_local=check_out_dt
+                        )
+                        
+                        if result:
+                            updated += 1
+                            print(f"✅ Updated calendar event {event_id[:20] if len(event_id) > 20 else event_id}... for booking {booking.get('booking_id', 'unknown')[:8]}...")
+                        else:
+                            errors += 1
+                            print(f"❌ Failed to update calendar event {event_id[:20] if len(event_id) > 20 else event_id}... for booking {booking.get('booking_id', 'unknown')[:8]}... (update_calendar_event returned None)")
+                    except Exception as update_error:
+                        errors += 1
+                        print(f"❌ Exception updating calendar event {event_id[:20] if len(event_id) > 20 else event_id}... for booking {booking.get('booking_id', 'unknown')[:8]}...: {update_error}")
+                        import traceback
+                        traceback.print_exc()
+                except Exception as e:
+                    errors += 1
+                    booking_id_str = booking.get('booking_id', 'unknown')[:8] if booking else 'unknown'
+                    print(f"❌ Error syncing booking {booking_id_str}...: {e}")
+                    import traceback
+                    traceback.print_exc()
+        
+        print(f"\n{'='*60}")
+        print(f"DB → Calendar sync completed: {updated} updated, {errors} errors")
+        print(f"{'='*60}\n")
+        return {
+            "success": errors == 0,
+            "updated": updated,
+            "errors": errors,
+            "message": f"Synced {updated} bookings to Calendar, {errors} errors",
+            "details": "Check server console (terminal) for detailed error messages. Press F12 in browser to see sync logs."
+        }
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Critical error in sync_db_to_calendar_endpoint: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error syncing DB to Calendar: {error_msg}")
+
+
+# ============================================================================
+# Auto-Sync: Background Scheduler for Automatic Synchronization
+# ============================================================================
+
+# Global state for auto-sync
+auto_sync_enabled = True  # Default: enabled
+auto_sync_interval_minutes = int(os.getenv("AUTO_SYNC_INTERVAL_MINUTES", "5"))  # Default: 5 minutes
+scheduler = None
+
+
+def run_auto_sync():
+    """
+    Background task that runs automatic synchronization
+    - Calendar → DB: Syncs changes from Google Calendar to database
+    - Sheets → DB: Syncs changes from Google Sheets to database
+    """
+    if not auto_sync_enabled:
+        print("ℹ️ Auto-sync is disabled, skipping...")
+        return
+    
+    try:
+        from src.sync_calendar import sync_calendar_to_db
+        from src.sync_sheets import sync_sheets_to_db
+        
+        print(f"\n{'='*60}")
+        print(f"🔄 Starting automatic sync (Calendar → DB, Sheets → DB)")
+        print(f"{'='*60}")
+        
+        # Sync Calendar → DB (detects changes in calendar events)
+        try:
+            cal_result = sync_calendar_to_db(days_back=30, days_forward=365)
+            if len(cal_result) == 4:
+                cal_imported, cal_updated, cal_errors, _ = cal_result
+            else:
+                cal_imported, cal_updated, cal_errors = cal_result
+            print(f"✅ Calendar → DB: {cal_imported} imported, {cal_updated} updated, {cal_errors} errors")
+        except Exception as cal_error:
+            print(f"❌ Calendar → DB sync failed: {cal_error}")
+        
+        # Sync Sheets → DB (detects changes in Google Sheets)
+        try:
+            sheets_result = sync_sheets_to_db()
+            if len(sheets_result) == 4:
+                sheets_imported, sheets_updated, sheets_errors, _ = sheets_result
+            else:
+                sheets_imported, sheets_updated, sheets_errors = sheets_result
+            print(f"✅ Sheets → DB: {sheets_imported} imported, {sheets_updated} updated, {sheets_errors} errors")
+        except Exception as sheets_error:
+            print(f"❌ Sheets → DB sync failed: {sheets_error}")
+        
+        print(f"{'='*60}\n")
+        
+    except Exception as e:
+        print(f"❌ Error in auto-sync: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize background scheduler on startup
+    """
+    global scheduler
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+        
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(
+            run_auto_sync,
+            trigger=IntervalTrigger(minutes=auto_sync_interval_minutes),
+            id='auto_sync_job',
+            name='Automatic Sync (Calendar → DB, Sheets → DB)',
+            replace_existing=True
+        )
+        scheduler.start()
+        print(f"✅ Auto-sync scheduler started (interval: {auto_sync_interval_minutes} minutes)")
+        print(f"   🔄 Auto-sync will run every {auto_sync_interval_minutes} minutes")
+        print(f"   📅 Calendar → DB: Detects changes in calendar events and updates DB")
+        print(f"   📊 Sheets → DB: Detects changes in Google Sheets and updates DB")
+    except ImportError as e:
+        print(f"⚠️ Warning: APScheduler not installed. Install with: pip install apscheduler==3.10.4")
+        print(f"   Auto-sync will be disabled until APScheduler is installed")
+        scheduler = None
+    except Exception as e:
+        print(f"⚠️ Warning: Could not start auto-sync scheduler: {e}")
+        import traceback
+        traceback.print_exc()
+        scheduler = None
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Shutdown background scheduler on shutdown
+    """
+    global scheduler
+    if scheduler:
+        try:
+            scheduler.shutdown()
+            print("✅ Auto-sync scheduler stopped")
+        except Exception as e:
+            print(f"⚠️ Warning: Error stopping scheduler: {e}")
+
+
+@app.get("/admin/sync/auto-status")
+async def get_auto_sync_status():
+    """
+    Get auto-sync status (enabled/disabled, interval, last run time)
+    """
+    global auto_sync_enabled, auto_sync_interval_minutes, scheduler
+    
+    last_run_time = None
+    next_run_time = None
+    
+    if scheduler:
+        try:
+            job = scheduler.get_job('auto_sync_job')
+            if job and job.next_run_time:
+                next_run_time = job.next_run_time.isoformat()
+            else:
+                # Calculate next run (current time + interval) if job not scheduled yet
+                next_run_time = (datetime.now() + timedelta(minutes=auto_sync_interval_minutes)).isoformat()
+        except Exception as e:
+            print(f"Warning: Could not get job info: {e}")
+    
+    return {
+        "enabled": auto_sync_enabled,
+        "interval_minutes": auto_sync_interval_minutes,
+        "last_run_time": last_run_time,
+        "next_run_time": next_run_time,
+        "scheduler_running": scheduler is not None and scheduler.running if scheduler else False
+    }
+
+
+@app.post("/admin/sync/auto-toggle")
+async def toggle_auto_sync():
+    """
+    Enable/disable auto-sync
+    """
+    global auto_sync_enabled, scheduler
+    
+    auto_sync_enabled = not auto_sync_enabled
+    
+    if scheduler:
+        try:
+            job = scheduler.get_job('auto_sync_job')
+            if job:
+                if auto_sync_enabled:
+                    scheduler.resume_job('auto_sync_job')
+                else:
+                    scheduler.pause_job('auto_sync_job')
+        except Exception as e:
+            print(f"Warning: Could not toggle job: {e}")
+    
+    return {
+        "success": True,
+        "enabled": auto_sync_enabled,
+        "message": f"Auto-sync {'enabled' if auto_sync_enabled else 'disabled'}"
+    }
 
 
 if __name__ == "__main__":

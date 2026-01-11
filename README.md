@@ -227,27 +227,41 @@ backend/
 | חישוב תמחור | 🟢 עובד | כולל מבצעים ושבתות |
 | הזמנה ליומן | 🟢 עובד | יוצר אירוע ב-Calendar |
 | שמירה ל-DB | 🟢 עובד | PostgreSQL מחובר |
-| Agent Chat | 🟡 חלקי | A1-A4 הושלמו: DB, Endpoint, Tool Routing, Knowledge (Business Facts + FAQ). עקרונות הסוכן החכם מוגדרים וממומשים |
-| Host Console | 🟡 חלקי | UI קיים, חיבור חלקי |
+| Agent Chat | 🟢 עובד | **A1-A4.1 הושלמו במלואם**: DB, Endpoint, Tool Routing, Knowledge (Business Facts + FAQ), שיפור זמינות, מיקום/מפות. עקרונות הסוכן החכם מוגדרים וממומשים |
+| סנכרון אוטומטי | 🟢 עובד | **Calendar → DB** ו-**Sheets → DB** רץ כל 5 דקות ברקע (APScheduler). כפתורי סנכרון ידניים זמינים לשליטה מיידית |
+| עריכת הזמנות | 🟢 עובד | עריכת הזמנות מלאה עם העברת אירועים אוטומטית בין יומנים |
+| Host Console | 🟡 חלקי | UI קיים, Admin Panel מלא (Bookings, Audit, Stats, FAQ, Sync). חיבור חלקי |
 
 ### 🔧 בבדיקות
 - ✅ API endpoints - יציבים
 - ✅ Google Calendar sync - פעיל
-- ⏳ Agent conversation flow - בפיתוח
-- ⏳ FAQ management - בפיתוח
+- ✅ Agent conversation flow - עובד מלא
+- ✅ FAQ management - עובד מלא (אישור, עריכה, מחיקה)
+- ✅ Business Facts - עובד מלא (CRUD מלא)
+- ✅ סנכרון אוטומטי - פעיל (APScheduler)
 
 ---
 
 ## 🚀 שלבים עתידיים
 
-### Phase 1: השלמת Agent Chat
+### Phase 1: השלמת Agent Chat ✅ **הושלם במלואם**
 - [x] Agent Chat בסיסי עם context (A1-A3 הושלמו)
 - [x] שמירת שיחות ב-DB עם conversation history
 - [x] Business Facts ו-FAQ מאושר (A4 הושלם)
 - [x] עקרונות הסוכן החכם מוגדרים וממומשים (DB/Calendar first, אין המצאות, שקיפות)
-- [x] תמיכה במיקום/מפות (Google Maps + Waze)
+- [x] תמיכה במיקום/מפות (Google Maps + Waze) עם קישורים לחיצה
+- [x] **A4.1 - שיפור זמינות**: Agent שואל "מתי?" אם אין תאריכים, מציג רשימה/טבלה מסודרת של תאריכים פנויים
+- [x] **תהליך הזמנה מלא**: זמינות → הצעת מחיר → פרטי לקוח → Hold → תשלום → אישור
+- [x] **עריכת הזמנות**: עריכה מלאה של כל פרטי הזמנה עם העברת אירועים אוטומטית בין יומנים
 - [ ] שילוב GPT-4 / Claude (עתידי)
 - [ ] Handoff למארח במקרה הצורך (עתידי)
+
+### Phase 1.5: סנכרון דו-כיווני ✅ **הושלם**
+- [x] **סנכרון אוטומטי**: Calendar → DB ו-Sheets → DB רץ כל 5 דקות ברקע (APScheduler)
+- [x] **כפתורי סנכרון ידניים**: Sheets → DB, DB → Sheets, Calendar → DB, DB → Calendar
+- [x] **ניהול סנכרון אוטומטי**: הפעלה/כיבוי דרך UI, הצגת סטטוס, זמן סנכרון הבא
+- [x] **עריכת הזמנות**: עריכה מלאה עם העברת אירועים אוטומטית בין יומנים כשמשנים צימר
+- [x] **Endpoints**: `GET /admin/sync/auto-status`, `POST /admin/sync/auto-toggle`
 
 ### Phase 2: ממשק ניהול
 - [ ] ניהול FAQ מלא

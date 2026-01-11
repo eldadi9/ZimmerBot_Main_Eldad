@@ -19,17 +19,18 @@ class Agent:
         message_lower = message.lower()
         context = context or {}
         
-        # Intent keywords
+        # Intent keywords - מורחב עם כל המילים האפשריות
         intent_keywords = {
-            'availability': ['זמינות', 'פנוי', 'פנויה', 'זמין', 'available', 'availability', 'free', 'vacant'],
-            'quote': ['מחיר', 'כמה', 'עולה', 'תמחור', 'price', 'cost', 'quote', 'הצעת מחיר'],
-            'hold': ['שריין', 'הזמנה', 'להזמין', 'hold', 'reserve', 'book'],
-            'book': ['אישור', 'לאשר', 'לסיים', 'confirm', 'approve', 'complete'],
+            'availability': ['זמינות', 'פנוי', 'פנויה', 'זמין', 'available', 'availability', 'free', 'vacant', 'בדוק זמינות', 'מה זמין'],
+            'quote': ['מחיר', 'כמה', 'עולה', 'תמחור', 'price', 'cost', 'quote', 'הצעת מחיר', 'תמחיר', 'כמה עולה'],
+            'hold': ['שריין', 'הזמנה', 'להזמין', 'hold', 'reserve', 'book', 'תשריין', 'תשריין', 'שריינתי', 'שריינת', 'שריינו', 'שריינו לי', 'תשריין לי', 'תשריין לי את', 'שריין לי', 'שריין לי את'],
+            'book': ['אישור', 'לאשר', 'לסיים', 'confirm', 'approve', 'complete', 'אשר', 'אישרתי', 'מאשר', 'מאושר'],
             'cabin_info': ['תמונה', 'תמונות', 'מידע', 'כתובת', 'תכונות', 'פרטים', 'אודות', 'מה יש', 'מה כולל',
-                          'image', 'info', 'address', 'features', 'details', 'about'],
-            'location': ['מיקום', 'איפה', 'כתובת', 'מפה', 'maps', 'waze', 'גוגל מפות', 'וייז', 'location', 'address', 'איך מגיעים'],
-            'list_cabins': ['רשימה', 'כל הצימרים', 'שמות', 'list', 'all cabins', 'names'],
+                          'image', 'info', 'address', 'features', 'details', 'about', 'תראה לי', 'תראה', 'אפשר לראות'],
+            'location': ['מיקום', 'איפה', 'כתובת', 'מפה', 'maps', 'waze', 'גוגל מפות', 'וייז', 'location', 'address', 'איך מגיעים', 'שלח מיקום', 'שלח לי מיקום', 'איפה המקום', 'איפה הצימר', 'איפה זה', 'קישור למקום', 'מיקום הצימר', 'איפה נמצא', 'איפה נמצא הצימר', 'איפה נמצא המקום'],
+            'list_cabins': ['רשימה', 'כל הצימרים', 'שמות', 'list', 'all cabins', 'names', 'מה הצימרים', 'איזה צימרים', 'רשימת צימרים'],
             'greeting': ['שלום', 'היי', 'בוקר', 'ערב', 'hello', 'hi', 'hey'],
+            'confirm': ['כן', 'אוקיי', 'בסדר', 'בוא', 'בואו', 'יאללה', 'yes', 'ok', 'okay', 'אני רוצה', 'אני רוצה להזמין', 'בוא נזמין', 'בואו נזמין', 'אני מוכן', 'מוכן', 'בוא נתחיל', 'בואו נתחיל'],
         }
         
         # Calculate intent scores
@@ -66,9 +67,19 @@ class Agent:
         elif primary_intent == 'list_cabins':
             actions = ['list_cabins']
         elif primary_intent == 'confirm':
-            actions = ['book']  # If user confirms, try to book
+            # Check context - if we have quote_confirmed, request customer details
+            if context and context.get('booking_flow') and context.get('booking_flow').get('step') == 'quote_confirmed':
+                actions = ['customer_details']  # Request customer details form
+            elif context and context.get('last_quote'):
+                actions = ['customer_details']  # Request customer details form
+            else:
+                actions = ['book']  # If user confirms, try to book
         elif primary_intent == 'book_now':
-            actions = ['hold', 'book']
+            # Check context - if we have quote, request customer details first
+            if context and (context.get('last_quote') or (context.get('booking_flow') and context.get('booking_flow').get('step') == 'quote_confirmed')):
+                actions = ['customer_details']  # Request customer details form first
+            else:
+                actions = ['quote']  # Get quote first, not hold directly
         
         # Special handling for short messages that might be context-dependent
         message_words = message_lower.split()
@@ -82,26 +93,68 @@ class Agent:
                 confidence = 0.9
                 return (primary_intent, confidence, actions)
         
-        # "כן" or "אוקיי" - check if we have quote in context
-        if message_lower.strip() in ['כן', 'אוקיי', 'בסדר', 'בוא', 'בואו', 'יאללה', 'yes', 'ok', 'okay']:
-            if context and context.get('last_quote'):
+        # "כן" or confirmation words - check context for booking flow state
+        confirm_keywords = ['כן', 'אוקיי', 'בסדר', 'בוא', 'בואו', 'יאללה', 'yes', 'ok', 'okay', 'אני רוצה', 'אני רוצה להזמין', 'בוא נזמין', 'בואו נזמין', 'אני מוכן', 'מוכן', 'בוא נתחיל', 'בואו נתחיל', 'תזמין', 'תשריין', 'שריין', 'שריין לי', 'תשריין לי']
+        if message_lower.strip() in confirm_keywords or any(kw in message_lower for kw in confirm_keywords):
+            # Step 1: If we have quote_confirmed → proceed to customer details form
+            if context and context.get('booking_flow') and context.get('booking_flow').get('step') == 'quote_confirmed':
                 primary_intent = 'confirm'
-                actions = ['book']
+                actions = ['customer_details']  # Request customer details form
+                confidence = 0.95
+                return (primary_intent, confidence, actions)
+            # Step 1b: If we have last_quote (from metadata) → proceed to customer details form
+            elif context and context.get('last_quote'):
+                primary_intent = 'confirm'
+                actions = ['customer_details']  # Request customer details form
                 confidence = 0.9
                 return (primary_intent, confidence, actions)
-            elif context and (context.get('cabin_id') and context.get('check_in') and context.get('check_out')):
+            # Step 2: If we have availability confirmed but no quote yet → get quote
+            elif context and context.get('booking_flow') and context.get('booking_flow').get('step') == 'availability_confirmed':
+                primary_intent = 'quote'
+                actions = ['quote']
+                confidence = 0.9
+                return (primary_intent, confidence, actions)
+            # Step 3: If we have all details → proceed to hold/booking
+            elif context and (context.get('cabin_id') and context.get('check_in') and context.get('check_out') and context.get('customer_details')):
                 primary_intent = 'book_now'
                 actions = ['hold', 'book']
+                confidence = 0.9
+                return (primary_intent, confidence, actions)
+            # Fallback: If we have cabin and dates but no quote → get quote
+            elif context and (context.get('cabin_id') and context.get('check_in') and context.get('check_out')):
+                primary_intent = 'quote'
+                actions = ['quote']
                 confidence = 0.8
                 return (primary_intent, confidence, actions)
         
-        # "תזמין" or "עשה הזמנה" - book_now
-        if any(kw in message_lower for kw in ['תזמין', 'עשה הזמנה', 'צור הזמנה', 'בוא נזמין', 'בואו נזמין', 'תעשה הזמנה']):
+        # "תזמין", "תשריין", "עשה הזמנה" - book_now (but check if we have quote first!)
+        booking_keywords = ['תזמין', 'עשה הזמנה', 'צור הזמנה', 'בוא נזמין', 'בואו נזמין', 'תעשה הזמנה', 'תשריין', 'שריין', 'שריין לי', 'תשריין לי', 'תשריין לי את', 'שריינתי', 'שריינת', 'שריינו', 'אני רוצה להזמין', 'אני רוצה לשריין']
+        if any(kw in message_lower for kw in booking_keywords):
             if context and (context.get('cabin_id') and context.get('check_in') and context.get('check_out')):
-                primary_intent = 'book_now'
-                actions = ['hold', 'book']
-                confidence = 0.9
-                return (primary_intent, confidence, actions)
+                # Check if we have quote_confirmed - if yes, proceed to customer details
+                if context.get('booking_flow') and context.get('booking_flow').get('step') == 'quote_confirmed':
+                    primary_intent = 'confirm'
+                    actions = ['customer_details']  # Request customer details form
+                    confidence = 0.95
+                    return (primary_intent, confidence, actions)
+                # Check if we have quote (from last_quote) - if yes, proceed to customer details
+                elif context.get('last_quote'):
+                    primary_intent = 'confirm'
+                    actions = ['customer_details']  # Request customer details form
+                    confidence = 0.9
+                    return (primary_intent, confidence, actions)
+                # Check if we have availability_confirmed - if yes, get quote
+                elif context.get('booking_flow') and context.get('booking_flow').get('step') == 'availability_confirmed':
+                    primary_intent = 'quote'
+                    actions = ['quote']
+                    confidence = 0.9
+                    return (primary_intent, confidence, actions)
+                # No quote yet - get quote first
+                else:
+                    primary_intent = 'quote'
+                    actions = ['quote']
+                    confidence = 0.9
+                    return (primary_intent, confidence, actions)
         
         # If we detected a cabin name/id but no clear intent, determine based on message
         extracted_cabin = self.extract_cabin_id(message)
@@ -301,11 +354,13 @@ class Agent:
             return match.group(1).upper()
         
         # Cabin name patterns - check for exact word match or in phrase
+        # Note: Add new cabin names here when adding new cabins
         cabin_names = {
             'מורן': 'ZB03',
             'מורני': 'ZB03',
             'יולי': 'ZB01',
             'אמי': 'ZB02',
+            'ליאה': 'ZB04',  # TODO: Verify this is the correct cabin ID
         }
         
         # Split message into words
@@ -389,6 +444,23 @@ class Agent:
                 response += f"מספר: {cabin.get('cabin_id_string') or cabin.get('cabin_id', 'N/A')}\n"
                 if cabin.get('area'):
                     response += f"📍 אזור: {cabin.get('area')}\n"
+                
+                # Add address if available
+                cabin_address = cabin.get('address') or ''
+                if cabin_address:
+                    response += f"📍 **כתובת:** {cabin_address}\n"
+                    # Add Maps/Waze links if available
+                    google_maps_url = cabin.get('google_maps_url')
+                    waze_url = cabin.get('waze_url')
+                    if google_maps_url or waze_url:
+                        response += f"🗺️ **מפות:** "
+                        links = []
+                        if google_maps_url:
+                            links.append(f"[Google Maps]({google_maps_url})")
+                        if waze_url:
+                            links.append(f"[Waze]({waze_url})")
+                        response += " • ".join(links) + "\n"
+                
                 response += "\n"
                 
                 if cabin.get('description'):
@@ -424,101 +496,250 @@ class Agent:
         if intent == 'location' and 'cabin_info' in tool_results:
             cabin = tool_results['cabin_info']
             if cabin:
-                # Get address components (from tool_results)
-                street = cabin.get('street_name') or ''
-                city = cabin.get('city') or ''
-                postal_code = cabin.get('postal_code') or ''
+                # Get full address from tool_results (already built in api_server)
+                full_address = cabin.get('address') or ''
                 
-                # Convert postal_code to string if needed
-                if postal_code and not isinstance(postal_code, str):
-                    postal_code = str(postal_code)
-                
-                # Build full address
-                address_parts = [str(p) for p in [street, city, postal_code] if p]
-                full_address = ', '.join(address_parts)
-                
+                # If no address from tool_results, try to build from components
                 if not full_address:
-                    # Try alternative field names
-                    full_address = cabin.get('address') or ''
-                    if not full_address:
-                        # Try to build from individual components again
-                        full_address = f"{street}, {city} {postal_code}".strip() if (street or city) else ''
+                    street = cabin.get('street_name') or ''
+                    city = cabin.get('city') or ''
+                    postal_code = cabin.get('postal_code') or ''
+                    
+                    # Convert postal_code to string if needed
+                    if postal_code and not isinstance(postal_code, str):
+                        postal_code = str(postal_code)
+                    
+                    # Build full address
+                    address_parts = [str(p) for p in [street, city, postal_code] if p]
+                    full_address = ', '.join(address_parts)
+                
+                # Get URLs from tool_results (already built in api_server) or build them
+                google_maps_url = cabin.get('google_maps_url')
+                waze_url = cabin.get('waze_url')
+                
+                if not google_maps_url or not waze_url:
+                    if full_address:
+                        import urllib.parse
+                        encoded_address = urllib.parse.quote(full_address)
+                        if not google_maps_url:
+                            google_maps_url = f"https://www.google.com/maps/search/?api=1&query={encoded_address}"
+                        if not waze_url:
+                            waze_url = f"https://waze.com/ul?q={encoded_address}"
                 
                 if full_address:
-                    # URL encode the address
-                    import urllib.parse
-                    encoded_address = urllib.parse.quote(full_address)
-                    
-                    # Create Google Maps link
-                    google_maps_url = f"https://www.google.com/maps/search/?api=1&query={encoded_address}"
-                    
-                    # Create Waze link
-                    waze_url = f"https://waze.com/ul?q={encoded_address}"
-                    
                     response = f"📍 **מיקום הצימר {cabin.get('name', '')}:**\n\n"
                     response += f"**כתובת:** {full_address}\n\n"
-                    response += f"🗺️ **קישורים למפות:**\n"
-                    response += f"• [Google Maps]({google_maps_url})\n"
-                    response += f"• [Waze]({waze_url})\n\n"
-                    response += f"💡 לחץ על הקישורים כדי לפתוח במפה או באפליקציית הניווט שלך."
+                    
+                    if google_maps_url or waze_url:
+                        response += f"🗺️ **קישורים למפות:**\n"
+                        if google_maps_url:
+                            response += f"• 🗺️ [Google Maps]({google_maps_url})\n"
+                        if waze_url:
+                            response += f"• 🧭 [Waze]({waze_url})\n"
+                        response += "\n"
+                        response += f"💡 לחץ על הקישורים כדי לפתוח במפה או באפליקציית הניווט שלך."
+                    
                     return response
                 else:
-                    return "❌ לא מצאתי כתובת לצימר זה. אנא פנה לבעלים לקבלת פרטים."
+                    return "❌ לא מצאתי כתובת לצימר זה בגוגל שיטס. אנא פנה לבעלים לקבלת פרטים או עדכן את הכתובת ב-Google Sheets."
             return "❌ לא מצאתי מידע על הצימר."
         
         # Availability
-        if intent == 'availability' and 'availability' in tool_results:
-            cabins = tool_results['availability']
-            if cabins:
-                response = f"✅ מצאתי {len(cabins)} צימרים זמינים בתאריכים שביקשת:\n\n"
-                for cabin in cabins:
-                    name = cabin.get('name', 'N/A')
-                    cabin_id = cabin.get('cabin_id_string') or cabin.get('cabin_id', 'N/A')
-                    area = cabin.get('area', 'N/A')
-                    price = cabin.get('price', 0)
-                    nights = cabin.get('nights', 0)
-                    
-                    response += f"🏡 {name} ({cabin_id}) - {area}\n"
-                    if price:
-                        response += f"💰 מחיר: {price}₪ ל-{nights} לילות\n"
-                    
-                    features = cabin.get('features')
-                    if features:
-                        if isinstance(features, dict):
-                            feature_list = [k for k, v in features.items() if v][:5]
-                        else:
-                            feature_list = str(features).split(',')[:5] if isinstance(features, str) else []
-                        if feature_list:
-                            response += f"✨ תכונות: {', '.join(feature_list)}\n"
-                    
-                    response += "\n"
+        if intent == 'availability':
+            # Check if dates are needed
+            if tool_results.get('availability_needs_dates'):
+                # Try to get cabin_id from context or tool_results
+                cabin_id = None
+                if context and context.get('cabin_id'):
+                    cabin_id = context.get('cabin_id')
+                elif tool_results.get('context') and tool_results['context'].get('cabin_id'):
+                    cabin_id = tool_results['context'].get('cabin_id')
                 
-                response += "איזה צימר מעניין אותך? אני יכול לתת לך הצעת מחיר מפורטת או לעזור להזמין."
-                return response
-            return "❌ לא מצאתי צימרים זמינים בתאריכים שביקשת."
+                if cabin_id:
+                    return f"אשמח לבדוק זמינות לצימר {cabin_id}. מתי תרצה להגיע? (לדוגמה: 15-17 במרץ או כל מרץ 2026)"
+                else:
+                    return "אשמח לבדוק זמינות. איזה צימר ובאילו תאריכים? (לדוגמה: 'בדוק לי זמינות בצימר של יולי ב-15-17 במרץ')"
+            
+            # Check if we have availability results
+            if 'availability' in tool_results:
+                cabins = tool_results['availability']
+                if cabins:
+                    # Check if this is a monthly availability (available_dates list)
+                    if len(cabins) == 1 and cabins[0].get('available_dates'):
+                        cabin = cabins[0]
+                        name = cabin.get('name', 'N/A')
+                        cabin_id = cabin.get('cabin_id_string') or cabin.get('cabin_id', 'N/A')
+                        available_dates = cabin.get('available_dates', [])
+                        booked_dates = cabin.get('booked_dates', [])
+                        total_available = cabin.get('total_available', 0)
+                        total_dates = cabin.get('total_dates_in_range', 0)
+                        month_name = tool_results.get('context', {}).get('month_name', 'החודש')
+                        
+                        if available_dates:
+                            response = f"📅 **זמינות {name} ({cabin_id}) - {month_name}:**\n\n"
+                            response += f"✅ **תאריכים פנויים:** {total_available} מתוך {total_dates} ימים\n\n"
+                            
+                            # Format dates nicely - group consecutive dates
+                            from datetime import datetime, timedelta
+                            dates_parsed = sorted([datetime.strptime(d, '%Y-%m-%d') for d in available_dates])
+                            
+                            if len(dates_parsed) <= 60:
+                                # If 60 dates or less, show all grouped
+                                response += "**📋 רשימת תאריכים פנויים:**\n\n"
+                                current_group_start = None
+                                current_group_end = None
+                                groups = []
+                                
+                                for date in dates_parsed:
+                                    if current_group_start is None:
+                                        current_group_start = date
+                                        current_group_end = date
+                                    elif (date - current_group_end).days == 1:
+                                        # Consecutive date
+                                        current_group_end = date
+                                    else:
+                                        # Gap found - save previous group
+                                        if current_group_start == current_group_end:
+                                            groups.append(f"• {current_group_start.strftime('%d.%m.%Y')}")
+                                        else:
+                                            groups.append(f"• {current_group_start.strftime('%d.%m.%Y')} - {current_group_end.strftime('%d.%m.%Y')} ({((current_group_end - current_group_start).days + 1)} ימים)")
+                                        current_group_start = date
+                                        current_group_end = date
+                                
+                                # Output last group
+                                if current_group_start is not None:
+                                    if current_group_start == current_group_end:
+                                        groups.append(f"• {current_group_start.strftime('%d.%m.%Y')}")
+                                    else:
+                                        groups.append(f"• {current_group_start.strftime('%d.%m.%Y')} - {current_group_end.strftime('%d.%m.%Y')} ({((current_group_end - current_group_start).days + 1)} ימים)")
+                                
+                                # Display groups (max 20 groups to avoid too long response)
+                                for group in groups[:20]:
+                                    response += f"{group}\n"
+                                
+                                if len(groups) > 20:
+                                    response += f"\n... ועוד {len(groups) - 20} טווחי תאריכים נוספים\n"
+                            else:
+                                # Too many dates - show summary
+                                response += f"**תאריכים פנויים רבים!**\n"
+                                response += f"📅 ראשון: {dates_parsed[0].strftime('%d.%m.%Y')}\n"
+                                response += f"📅 אחרון: {dates_parsed[-1].strftime('%d.%m.%Y')}\n"
+                                response += f"\n💡 לצפייה בכל התאריכים, ציין טווח תאריכים ספציפי (למשל: '15-17 במרץ')\n"
+                            
+                            if booked_dates:
+                                response += f"\n❌ **תאריכים תפוסים:** {len(booked_dates)} ימים\n"
+                            
+                            response += "\n💡 **איך להזמין?** ציין תאריכים ספציפיים (למשל: '15-17 במרץ') ואני אכין עבורך הצעת מחיר."
+                            
+                            return response
+                    
+                    # Regular availability check (specific dates) - Offer to proceed with booking
+                    response = f"✅ מצאתי {len(cabins)} צימרים זמינים בתאריכים שביקשת:\n\n"
+                    for cabin in cabins:
+                        name = cabin.get('name', 'N/A')
+                        cabin_id = cabin.get('cabin_id_string') or cabin.get('cabin_id', 'N/A')
+                        area = cabin.get('area', 'N/A')
+                        price = cabin.get('total_price', 0) or cabin.get('price', 0)
+                        nights = cabin.get('nights', 0)
+                        
+                        response += f"🏡 {name} ({cabin_id}) - {area}\n"
+                        if price:
+                            response += f"💰 מחיר: {price}₪ ל-{nights} לילות\n"
+                        
+                        features = cabin.get('features')
+                        if features:
+                            if isinstance(features, dict):
+                                feature_list = [k for k, v in features.items() if v][:5]
+                            else:
+                                feature_list = str(features).split(',')[:5] if isinstance(features, str) else []
+                            if feature_list:
+                                response += f"✨ תכונות: {', '.join(feature_list)}\n"
+                        
+                        response += "\n"
+                    
+                    # Offer to proceed with booking process - set booking_flow state
+                    if len(cabins) == 1:
+                        # Single cabin - set booking_flow state for automatic quote on confirmation
+                        cabin = cabins[0]
+                        cabin_id = cabin.get('cabin_id_string') or cabin.get('cabin_id', 'N/A')
+                        check_in = tool_results.get('context', {}).get('check_in') or context.get('check_in', '')
+                        check_out = tool_results.get('context', {}).get('check_out') or context.get('check_out', '')
+                        
+                        if cabin_id and check_in and check_out:
+                            response += "💡 **האם תרצה להמשיך להזמנה?**\n"
+                            response += "אם כן, כתוב 'כן' או 'תזמין' ואני אכין עבורך הצעת מחיר מפורטת, ואז נתחיל בתהליך ההזמנה."
+                            # Set booking_flow state for single cabin availability
+                            tool_results['booking_flow'] = {
+                                'step': 'availability_confirmed',
+                                'cabin_id': cabin_id,
+                                'check_in': check_in,
+                                'check_out': check_out
+                            }
+                        else:
+                            response += "💡 **האם תרצה להמשיך להזמנה?**\n"
+                            response += "אם כן, כתוב 'כן' או 'תזמין' ואני אכין עבורך הצעת מחיר מפורטת, ואז נתחיל בתהליך ההזמנה."
+                    else:
+                        # Multiple cabins - user needs to choose
+                        response += "💡 **האם תרצה להמשיך להזמנה?**\n"
+                        response += "אם כן, בחר צימר וכתוב 'כן' או 'תזמין' ואני אכין עבורך הצעת מחיר מפורטת, ואז נתחיל בתהליך ההזמנה."
+                    
+                    return response
+                return "❌ לא מצאתי צימרים זמינים בתאריכים שביקשת."
         
         # Quote
         if intent == 'quote' and 'quote' in tool_results:
             quote = tool_results['quote']
             if quote:
                 cabin_name = quote.get('cabin_name', 'N/A')
+                cabin_id = quote.get('cabin_id', 'N/A')
                 total = quote.get('total', 0)
                 nights = quote.get('nights', 0)
+                check_in = quote.get('check_in', '')
+                check_out = quote.get('check_out', '')
                 
-                response = f"💰 הצעת מחיר ל-{cabin_name}:\n"
-                response += f"📅 {nights} לילות\n"
-                response += f"💵 סה\"כ: {total}₪\n\n"
+                # Ensure dates are in correct order (check_in < check_out)
+                try:
+                    from datetime import datetime
+                    # Parse dates (handle both date-only and datetime formats)
+                    check_in_str = str(check_in).split(' ')[0]  # Get date part only
+                    check_out_str = str(check_out).split(' ')[0]  # Get date part only
+                    check_in_dt = datetime.fromisoformat(check_in_str)
+                    check_out_dt = datetime.fromisoformat(check_out_str)
+                    if check_in_dt > check_out_dt:
+                        # Dates are reversed - swap them
+                        check_in, check_out = check_out, check_in
+                except Exception as e:
+                    # If parsing fails, use as-is
+                    pass
+                
+                response = f"💰 **הצעת מחיר ל-{cabin_name} ({cabin_id}):**\n\n"
+                response += f"📅 **תאריכים:** {check_in} → {check_out}\n"
+                response += f"📅 **מספר לילות:** {nights}\n"
+                response += f"💵 **סה\"כ:** {total}₪\n\n"
                 
                 breakdown = quote.get('breakdown', [])
                 if breakdown:
-                    response += "פירוט:\n"
-                    for item in breakdown[:5]:  # Limit to 5 items
+                    response += "**פירוט מחיר:**\n"
+                    for item in breakdown[:10]:  # Show up to 10 items
                         desc = item.get('description', '')
                         amount = item.get('amount', 0)
                         response += f"• {desc}: {amount}₪\n"
                     response += "\n"
                 
-                response += "האם תרצה להזמין?"
+                # Offer to proceed with booking - trigger customer details form
+                response += "💡 **האם תרצה להזמין?**\n"
+                response += "אם כן, כתוב 'כן', 'תזמין', או 'אני רוצה להזמין' ואני אפתח עבורך טופס מילוי פרטים."
+                
+                # Set flag to trigger customer details form on confirmation
+                tool_results['booking_flow'] = {
+                    'step': 'quote_confirmed',
+                    'cabin_id': cabin_id,
+                    'check_in': check_in,
+                    'check_out': check_out,
+                    'total': total,
+                    'nights': nights
+                }
+                
                 return response
             return "❌ לא הצלחתי לחשב מחיר. אנא נסה שוב."
         

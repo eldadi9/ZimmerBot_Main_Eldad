@@ -8,18 +8,18 @@ google-auth-httplib2==0.3.0
 google-auth-oauthlib==1.2.3
 googleapis-common-protos==1.72.0
 gspread==6.2.1
-httplib2==0.31.0
+httplib2==0.3.0
 idna==3.11
 oauthlib==3.3.1
-proto-plus==1.27.0
+proto-plus==1.72.0
 protobuf==6.33.2
 pyasn1==0.6.1
-pyasn1_modules==0.4.2
-pyparsing==3.3.1
+pyasn1_modules==0.6.1
+pyparsing==3.1.5
 python-dotenv==1.2.1
 requests==2.32.5
 requests-oauthlib==2.0.0
-rsa==4.9.1
+rsa==4.9
 uritemplate==4.2.0
 urllib3==2.6.2
 # Database
@@ -29,7 +29,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 # Redis (for Hold mechanism - Stage 4)
-redis==5.0.1
+redis==5.1.1
 # Payment Gateway (Stage 5)
 stripe==11.1.0
-email-validator==2.1.0
+email-validator==2.2.0
+# Background Tasks & Scheduling (for auto-sync)
+apscheduler==3.10.4

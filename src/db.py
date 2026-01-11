@@ -58,40 +58,94 @@ def read_cabins_from_db() -> List[Dict[str, Any]]:
             """)
             has_cabin_id_string = cursor.fetchone() is not None
             
+            # Check if address columns exist in DB
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'cabins' 
+                AND column_name IN ('street_name', 'city', 'postal_code')
+            """)
+            address_columns = {row[0] for row in cursor.fetchall()}
+            has_street = 'street_name' in address_columns
+            has_city = 'city' in address_columns
+            has_postal = 'postal_code' in address_columns
+            
             if has_cabin_id_string:
-                cursor.execute("""
-                    SELECT 
-                        id::text as cabin_id,
-                        name,
-                        area,
-                        max_adults,
-                        max_kids,
-                        features,
-                        base_price_night,
-                        weekend_price,
-                        images_urls,
-                        calendar_id,
-                        cabin_id_string
-                    FROM cabins
-                    ORDER BY name
-                """)
+                if has_street and has_city and has_postal:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            cabin_id_string,
+                            street_name,
+                            city,
+                            postal_code
+                        FROM cabins
+                        ORDER BY name
+                    """)
+                else:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            cabin_id_string
+                        FROM cabins
+                        ORDER BY name
+                    """)
             else:
-                cursor.execute("""
-                    SELECT 
-                        id::text as cabin_id,
-                        name,
-                        area,
-                        max_adults,
-                        max_kids,
-                        features,
-                        base_price_night,
-                        weekend_price,
-                        images_urls,
-                        calendar_id,
-                        id::text as cabin_id_string
-                    FROM cabins
-                    ORDER BY name
-                """)
+                if has_street and has_city and has_postal:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            id::text as cabin_id_string,
+                            street_name,
+                            city,
+                            postal_code
+                        FROM cabins
+                        ORDER BY name
+                    """)
+                else:
+                    cursor.execute("""
+                        SELECT 
+                            id::text as cabin_id,
+                            name,
+                            area,
+                            max_adults,
+                            max_kids,
+                            features,
+                            base_price_night,
+                            weekend_price,
+                            images_urls,
+                            calendar_id,
+                            id::text as cabin_id_string
+                        FROM cabins
+                        ORDER BY name
+                    """)
             
             # Note: cabin_id from DB is now a UUID string
             # If you need the original cabin_id from Sheets, you might want to add a cabin_id_string field
@@ -267,6 +321,10 @@ def save_booking_to_db(
             return booking_id
             
     except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Error saving booking to DB (cabin_id: {cabin_id[:8] if cabin_id else 'None'}..., customer_id: {customer_id[:8] if customer_id else 'None'}..., event_id: {event_id[:20] if event_id else 'None'}...): {error_msg}")
+        import traceback
+        traceback.print_exc()
         print(f"Error saving booking to DB: {e}")
         import traceback
         traceback.print_exc()
@@ -1160,10 +1218,13 @@ def suggest_faq(question: str, answer: str, customer_id: Optional[str] = None) -
         return None
 
 
-def approve_faq(faq_id: str, approved_by: Optional[str] = None, question: Optional[str] = None, answer: Optional[str] = None) -> bool:
+def approve_faq(faq_id: str, approved_by: Optional[str] = None, question: Optional[str] = None, answer: Optional[str] = None) -> tuple[bool, str]:
     """
     Approve a FAQ (only Host can do this)
     Can optionally update question and answer during approval
+    
+    Returns: (success: bool, message: str)
+    Message indicates status: 'approved', 'already_approved', 'updated_while_approved', 'not_found', or error message
     """
     try:
         with get_db_connection() as conn:
@@ -1171,53 +1232,123 @@ def approve_faq(faq_id: str, approved_by: Optional[str] = None, question: Option
             
             # First check if FAQ exists and is not already approved
             cursor.execute("""
-                SELECT id, approved FROM faq WHERE id = %s
+                SELECT id, approved, question, answer, suggested_answer FROM faq WHERE id = %s
             """, (faq_id,))
             existing = cursor.fetchone()
             
             if not existing:
                 print(f"FAQ {faq_id} not found")
-                return False
+                return (False, "not_found")
             
-            if existing[1]:  # Already approved
+            is_already_approved = existing[1]  # Already approved
+            
+            if is_already_approved:
                 print(f"FAQ {faq_id} is already approved")
                 # Still allow updating question/answer if provided
                 if question or answer:
-                    cursor.execute("""
-                        UPDATE faq 
-                        SET question = COALESCE(%s, question),
-                            answer = COALESCE(%s, answer),
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                    """, (question, answer, faq_id))
-                    conn.commit()
-                    return cursor.rowcount > 0
-                return False
+                    # Update question/answer for already approved FAQ
+                    updates = []
+                    params = []
+                    
+                    if question is not None:
+                        updates.append("question = %s")
+                        params.append(question)
+                    if answer is not None:
+                        updates.append("answer = %s")
+                        params.append(answer)
+                    
+                    if updates:
+                        updates.append("updated_at = CURRENT_TIMESTAMP")
+                        params.append(faq_id)
+                        
+                        query = f"""
+                            UPDATE faq 
+                            SET {', '.join(updates)}
+                            WHERE id = %s
+                        """
+                        cursor.execute(query, params)
+                        conn.commit()
+                        
+                        # Save audit log
+                        try:
+                            save_audit_log(
+                                table_name="faq",
+                                record_id=faq_id,
+                                action="UPDATE",
+                                new_values={"question": question, "answer": answer, "note": "Updated while already approved"}
+                            )
+                        except Exception as audit_error:
+                            print(f"Warning: Could not save audit log: {audit_error}")
+                        
+                        if cursor.rowcount > 0:
+                            return (True, "updated_while_approved")
+                        else:
+                            return (False, "update_failed")
+                
+                # Already approved and no updates requested
+                return (True, "already_approved")
             
+            # FAQ is not approved yet - proceed with approval
             # If question/answer provided, use them; otherwise use suggested_answer
             if question or answer:
+                # Use provided question/answer, but fallback to existing if not provided
+                final_question = question if question is not None else existing[2]  # existing question
+                final_answer = answer if answer is not None else (existing[4] if existing[4] else existing[3])  # suggested_answer or existing answer
+                
+                # approved_by can be None (not a required UUID for now)
+                # Only set approved_by if it's a valid UUID string, otherwise set to NULL
+                approved_by_value = None
+                if approved_by:
+                    try:
+                        import uuid as uuid_lib
+                        # Validate that approved_by is a valid UUID format
+                        uuid_lib.UUID(approved_by)
+                        approved_by_value = approved_by
+                    except (ValueError, AttributeError, TypeError):
+                        # Not a valid UUID, set to NULL
+                        approved_by_value = None
+                
                 cursor.execute("""
                     UPDATE faq 
                     SET approved = TRUE,
                         approved_by = %s,
                         approved_at = CURRENT_TIMESTAMP,
-                        question = COALESCE(%s, question),
-                        answer = COALESCE(%s, COALESCE(suggested_answer, answer)),
+                        question = %s,
+                        answer = %s,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s AND approved = FALSE
-                """, (approved_by, question, answer, faq_id))
+                """, (approved_by_value, final_question, final_answer, faq_id))
             else:
+                # Use suggested_answer or existing answer
+                final_answer = existing[4] if existing[4] else existing[3]  # suggested_answer or existing answer
+                # approved_by can be None (not a required UUID for now)
+                # Only set approved_by if it's a valid UUID string, otherwise set to NULL
+                approved_by_value = None
+                if approved_by:
+                    try:
+                        import uuid as uuid_lib
+                        # Validate that approved_by is a valid UUID format
+                        uuid_lib.UUID(approved_by)
+                        approved_by_value = approved_by
+                    except (ValueError, AttributeError, TypeError):
+                        # Not a valid UUID, set to NULL
+                        approved_by_value = None
+                
                 cursor.execute("""
                     UPDATE faq 
                     SET approved = TRUE,
                         approved_by = %s,
                         approved_at = CURRENT_TIMESTAMP,
-                        answer = COALESCE(suggested_answer, answer),
+                        answer = %s,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s AND approved = FALSE
-                """, (approved_by, faq_id))
+                """, (approved_by_value, final_answer, faq_id))
             
             conn.commit()
+            
+            if cursor.rowcount == 0:
+                # No rows updated - might have been approved by another process
+                return (False, "no_rows_updated")
             
             # Save audit log
             try:
@@ -1230,12 +1361,12 @@ def approve_faq(faq_id: str, approved_by: Optional[str] = None, question: Option
             except Exception as audit_error:
                 print(f"Warning: Could not save audit log: {audit_error}")
             
-            return cursor.rowcount > 0
+            return (True, "approved")
     except Exception as e:
         print(f"Error approving FAQ: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return (False, f"error: {str(e)}")
 
 
 def reject_faq(faq_id: str) -> bool:
@@ -1328,7 +1459,7 @@ def update_faq(faq_id: str, question: Optional[str] = None, answer: Optional[str
                 return False
             
             updates.append("updated_at = CURRENT_TIMESTAMP")
-            params.append(faq_id)
+            params.append(faq_id)  # Add faq_id as the last parameter for WHERE clause
             
             query = f"""
                 UPDATE faq 

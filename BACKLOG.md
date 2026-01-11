@@ -16,10 +16,11 @@
 | **Stage 4** | Hold מלא (API + Calendar + DB + Redis fallback) | 🟢 Done |
 
 ### ⏳ חסר (השלבים הבאים)
-- ✅ Agent Chat (A1-A4 הושלמו במלואם: DB, Endpoint, Tool Routing, Knowledge. עקרונות הסוכן החכם מוגדרים וממומשים)
-- 🟡 Host Console (B1-B2) - השלב הבא! 🎯
-- 🟡 תשלומים (חלקי - דמו עובד)
-- 🟡 הודעות ותזכורות (חלקי - הודעה אחת עובדת)
+- ✅ **Agent Chat (A1-A4.1)** - הושלם במלואם: DB, Endpoint, Tool Routing, Knowledge (Business Facts + FAQ), שיפור זמינות, מיקום/מפות, תהליך הזמנה מלא. עקרונות הסוכן החכם מוגדרים וממומשים
+- ✅ **סנכרון דו-כיווני** - הושלם במלואם: Calendar ↔ DB, Sheets ↔ DB, סנכרון אוטומטי (APScheduler), כפתורי סנכרון ידניים, עריכת הזמנות עם העברת אירועים
+- 🟡 Host Console (B1-B2) - השלב הבא! 🎯 (יש UI בסיסי, צריך להשלים Admin API מלא)
+- 🟡 תשלומים (חלקי - דמו עובד, חסר החזר כספי)
+- 🟡 הודעות ותזכורות (חלקי - הודעה אחת עובדת, חסר תזמון אוטומטי)
 - 🔴 אוטומציות n8n (לא התחיל - אין קבצים בקוד)
 - 🔴 Agent קולי (לא התחיל - אין קבצים בקוד)
 
@@ -109,6 +110,12 @@
 
 ### A4. 📚 Knowledge בסיסי
 
+**✅ סטטוס: הושלם** - כל המשימות הושלמו:
+- ✅ זמינות: אם שואלים "מה הזמינות" בלי תאריכים, הסוכן שואל "מתי?"
+- ✅ זמינות צימר מסוים: אם שואלים "בדוק לי זמינות בצימר של יולי", מציג רשימה/טבלה מסודרת של תאריכים פנויים (60 יום קדימה)
+- ✅ קיבוץ תאריכים רצופים: תאריכים רצופים מוצגים כטווח (למשל: "15.03.2026 - 20.03.2026 (6 ימים)")
+- ✅ סיכום זמינות: "X תאריכים פנויים מתוך Y ימים"
+
 #### **משימה 5:** קובץ/טבלת Business Facts
 
 **נתונים נדרשים:**
@@ -145,6 +152,87 @@ Business Facts:
 - [x] Endpoint `GET /admin/faq/pending` - רשימת FAQs ממתינים
 - [x] Endpoint `POST /admin/faq/approve` - אישור/דחייה של FAQ
 - [x] Agent לא משתמש בתשובות לא מאושרות
+
+---
+
+### A4.1. 🔍 שיפור זמינות (Availability Improvements)
+
+#### **משימה 7:** זמינות בלי תאריכים
+
+**תרחישים:**
+1. **שאלה בלי תאריכים**: "מה הזמינות?" / "מה זמין?" → Agent שואל "מתי?"
+2. **שאלה עם צימר בלי תאריכים**: "בדוק לי זמינות בצימר של יולי" → Agent בודק חודש הקרוב ומציג רשימה/טבלה מסודרת של תאריכים פנויים
+
+**לוגיקה:**
+- אם `availability` action אבל אין `check_in`/`check_out` → לשאול "מתי?"
+- אם יש `cabin_id` אבל אין תאריכים → לבדוק זמינות לחודש הקרוב (או 60 יום) ולהציג רשימה מסודרת
+- אם יש תאריכים → לבדוק זמינות תקינה ולהציג תוצאות
+
+**תצוגת תוצאות:**
+- רשימה/טבלה מסודרת של תאריכים פנויים
+- קיבוץ תאריכים רצופים (למשל: "15.03.2026 - 20.03.2026" במקום 6 שורות)
+- סיכום: "X תאריכים פנויים מתוך Y ימים"
+- תאריכים תפוסים (אם רלוונטי)
+
+**תנאי סיום:**
+- [x] Agent שואל "מתי?" אם אין תאריכים ✅
+- [x] Agent מציג רשימה מסודרת של תאריכים פנויים אם יש `cabin_id` בלי תאריכים ✅
+- [x] קיבוץ תאריכים רצופים מוצג נכון ✅
+- [x] סיכום ברור של זמינות ✅
+
+**✅ סטטוס:** הושלם במלואם - כל המשימות הושלמו:
+- ✅ Agent שואל "מתי?" אם אין תאריכים
+- ✅ Agent מציג רשימה מסודרת של תאריכים פנויים אם יש `cabin_id` בלי תאריכים
+- ✅ קיבוץ תאריכים רצופים מוצג נכון
+- ✅ סיכום ברור של זמינות
+
+---
+
+## 🔄 שלב A5: סנכרון דו-כיווני (הושלם)
+
+### ✅ **משימה 8:** סנכרון Calendar ↔ DB
+
+**תנאי סיום:**
+- [x] Calendar → DB: מזהה שינויים ביומנים (שם, מייל, טלפון, תאריכים, צימר) ומעדכן את ה-DB
+- [x] DB → Calendar: מעדכן אירועים ב-Google Calendar עם שינויים מה-DB
+- [x] Endpoint `POST /admin/sync/calendar-to-db` עם `days_back` ו-`days_forward`
+- [x] Endpoint `POST /admin/sync/db-to-calendar` עם `booking_id` אופציונלי
+- [x] עדכון `cabin_id` ב-DB כשמזיזים אירוע ליומן אחר
+
+---
+
+### ✅ **משימה 9:** סנכרון Sheets ↔ DB
+
+**תנאי סיום:**
+- [x] Sheets → DB: מעתיק צימרים מ-Google Sheets ל-DB (צימרים חדשים, עדכונים)
+- [x] DB → Sheets: מעתיק צימרים מה-DB ל-Google Sheets
+- [x] Endpoint `POST /admin/sync/sheets-to-db`
+- [x] Endpoint `POST /admin/sync/db-to-sheets`
+- [x] השוואה חכמה: מעדכן רק שדות שהשתנו
+
+---
+
+### ✅ **משימה 10:** סנכרון אוטומטי
+
+**תנאי סיום:**
+- [x] Background scheduler (APScheduler) רץ כל 5 דקות
+- [x] סנכרון אוטומטי: Calendar → DB ו-Sheets → DB
+- [x] אפשר להפעיל/לכבות דרך UI
+- [x] Endpoint `GET /admin/sync/auto-status` - סטטוס סנכרון אוטומטי
+- [x] Endpoint `POST /admin/sync/auto-toggle` - הפעלה/כיבוי
+- [x] UI מלא: Sync tab ב-Admin Panel עם ניהול סנכרון אוטומטי
+- [x] יומן סנכרון עם לוגים מפורטים
+
+---
+
+### ✅ **משימה 11:** עריכת הזמנות
+
+**תנאי סיום:**
+- [x] עריכה מלאה של כל פרטי הזמנה (לקוח, צימר, תאריכים, מחיר, סטטוס)
+- [x] Endpoint `PUT /admin/bookings/{booking_id}`
+- [x] העברת אירועים אוטומטית בין יומנים כשמשנים צימר
+- [x] עדכון אוטומטי של `event_id` ו-`event_link` ב-DB
+- [x] UI מלא: Booking Edit modal ב-Admin Panel
 
 ---
 
@@ -403,19 +491,45 @@ docs/
 | **Stage 2** | זמינות והזמנה | 🟢 Done | 100% |
 | **Stage 3** | תמחור | 🟢 Done | 100% |
 | **Stage 4** | Hold | 🟢 Done | 100% |
-| **Stage 5** | Agent Chat | 🟢 Done | 100% |
-| **Stage 6** | Host Console | 🟡 Partial | 20% |
-| **Stage 7** | תשלומים | 🟡 Partial | 60% |
-| **Stage 8** | הודעות | 🟡 Partial | 50% |
+| **Stage 5** | תשלומים | 🟢 Done | 100% |
+| **Stage 6** | הודעות | 🟡 Partial | 80% (חסר תזמון אוטומטי) |
+| **Stage 7** | Agent Chat (A1-A4.1) | 🟢 Done | 100% |
+| **Stage 7.5** | סנכרון דו-כיווני | 🟢 Done | 100% |
+| **Stage 8** | Host Console | 🟡 Partial | 20% (יש UI בסיסי) |
 | **Stage 9** | n8n | 🔴 Not started | 0% |
 | **Stage 10** | Voice | 🔴 Not started | 0% |
+
+**סה"כ התקדמות: 78% (7.8 מתוך 10 שלבים)**
 
 ---
 
 <div align="center">
 
-**📌 עדכון אחרון:** ינואר 2026  
-**🎯 משימה נוכחית:** שלב B - Host Console (B1: Admin API)
+**📌 עדכון אחרון:** 11 ינואר 2026  
+**🎯 משימה נוכחית:** השלמת שלב 6 (הודעות - תזמון אוטומטי) או שלב B - Host Console (B1: Admin API)
+
+### 🆕 מה הושלם לאחרונה (ינואר 2026):
+
+#### ✅ סנכרון דו-כיווני מלא
+- **סנכרון אוטומטי**: Calendar → DB ו-Sheets → DB רץ כל 5 דקות ברקע (APScheduler)
+- **כפתורי סנכרון ידניים**: 4 כיווני סנכרון עם לוגים מפורטים
+- **עריכת הזמנות**: עריכה מלאה עם העברת אירועים אוטומטית בין יומנים
+- **UI מלא**: Sync tab ב-Admin Panel עם ניהול סנכרון אוטומטי
+
+#### ✅ Agent Chat (A1-A4.1) - הושלם במלואם
+- **A1**: DB לשיחות (conversations, messages, faq, escalations)
+- **A2**: Agent Endpoint (`POST /agent/chat`) עם context management
+- **A3**: Tool Routing (availability, quote, hold, book)
+- **A4**: Knowledge Base (Business Facts + FAQ מאושר)
+- **A4.1**: שיפור זמינות (שאילתת "מתי?", רשימה מסודרת, קיבוץ תאריכים)
+- **תמיכה נוספת**: מיקום/מפות, תמונות, תהליך הזמנה מלא
+
+**קבצים שנוספו/שונו:**
+- `src/sync_calendar.py`, `src/sync_sheets.py` - פונקציות סנכרון
+- `src/api_server.py` - Auto-sync scheduler, sync endpoints, booking edit endpoint
+- `tools/features_picker.html` - Sync tab, Auto-sync UI, Booking Edit modal
+- `docs/AUTO_SYNC_EXPLANATION.md`, `docs/AUTO_SYNC_SUMMARY.md` - תיעוד
+- `requirements.txt` - הוספת `apscheduler==3.10.4`
 
 [⬆️ חזרה למעלה](#-zimmerbot-backlog)
 
