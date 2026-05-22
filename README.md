@@ -1,3 +1,14 @@
+## ZimmerBot — AI Booking Agent for Vacation Rentals
+
+An end-to-end AI agent system that handles guest conversations, closes bookings, syncs Google Calendar, and processes payments — without manual intervention.
+
+**Stack:** Python · FastAPI · PostgreSQL · n8n · Google Calendar · Telegram · Lovable · ChatGPT API · Tranzila  
+**Status:** Built and deployed
+
+[Hebrew documentation below / תיעוד בעברית למטה]
+
+---
+
 # 🏡 ZimmerBot - תיעוד מלא ותהליך פיתוח
 
 > 📚 **לתיעוד המלא והמפורט:** [README_FULL.md](./docs/README_FULL.md) | [BACKLOG.md](./BACKLOG.md) | [עקרונות הסוכן החכם](./docs/AGENT_PRINCIPLES.md)
@@ -201,18 +212,21 @@ backend/
 | `/agent/chat` | POST | 🚧 בפיתוח |
 | `/admin/*` | * | 🚧 עתידי |
 
-#### n8n Workflows (אוטומציות)
+#### n8n – Connector (MVC)
+
+חלוקה לפי **MVC**: Backend (FastAPI) = Model, Frontend = View, **n8n = Connector** (חיבור וערוצים).
+
+- **תיקייה:** `n8n/` – workflows לייבא ל-n8n.
+- **ZimmerBot Connector - Chat:** Webhook שמקבל הודעות וקורא ל-`POST /agent/chat` ב-Backend; מתאים ל-Frontend או לערוצים (WhatsApp וכו').
+- **ZimmerBot Agent - Chat:** צ'אט מובנה ב-n8n שמחובר לאותו Backend.
+- תיעוד מלא: [n8n/README.md](./n8n/README.md).
 
 ```yaml
-אוטומציות קיימות:
+אוטומציות מתוכננות (עדיין לא ב-workflows):
   - סיכום יומי למארח
   - התראות על חריגות
-  - Follow-ups אוטומטיים
-
-אוטומציות מתוכננות:
   - תזכורות טרום הגעה
   - סקרים לאחר עזיבה
-  - ניהול ביטולים
 ```
 
 ---
